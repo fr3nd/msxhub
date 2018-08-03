@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include "asm.h"
 
 #define MSXHUB_VERSION "0.0.1"
 
@@ -25,6 +26,7 @@
 #define GENV    #0x6B
 #define DOSVER  #0x6F
 #define _EOF    0xC7
+#define EXTBIO  #0xFFCA
 
 /* DOS errors */
 #define NOFIL   0xD7
@@ -44,11 +46,37 @@
 
 #define DOSCALL  call 5
 #define BIOSCALL ld iy,(EXPTBL-1)\
+#define EXTBIOCALL call EXTBIO
 
+#define HTTP_DEFAULT_PORT (80)
+
+enum TcpipUnapiFunctions {
+    UNAPI_GET_INFO = 0,
+    TCPIP_GET_CAPAB = 1,
+    TCPIP_NET_STATE = 3,
+    TCPIP_DNS_Q = 6,
+    TCPIP_DNS_S = 7,
+    TCPIP_TCP_OPEN = 13,
+    TCPIP_TCP_CLOSE = 14,
+    TCPIP_TCP_ABORT = 15,
+    TCPIP_TCP_STATE = 16,
+    TCPIP_TCP_SEND = 17,
+    TCPIP_TCP_RCV = 18,
+    TCPIP_WAIT = 29
+};
 
 /*** global variables {{{ ***/
 char configpath[255] = { '\0' };
+char progsdir[255] = { '\0' };
+char baseurl[255] = { '\0' };
+Z80_registers regs;
+unapi_code_block* codeBlock;
 /*** global variables }}} ***/
+
+/*** prototypes {{{ ***/
+void die(const char *s, ...);
+void debug(const char *s, ...);
+/*** prototypes }}} ***/
 
 /*** DOS functions {{{ ***/
 
@@ -333,6 +361,39 @@ char get_env(char* name, char* buffer, char buffer_size) __naked {
 
 /*** DOS functions }}} ***/
 
+/*** UNAPI functions {{{ ***/
+
+
+void init_unapi(void) {
+  int i;
+
+  codeBlock = (unapi_code_block*)0x8300;
+
+  i = UnapiGetCount("TCP/IP");
+  if(i==0) {
+    die("An UNAPI compatible network card is required to run this program.");
+  }
+  UnapiBuildCodeBlock(NULL, 1, codeBlock);
+
+  regs.Bytes.B = 1;
+  UnapiCall(codeBlock, TCPIP_GET_CAPAB, &regs, REGS_MAIN, REGS_MAIN);
+  if((regs.Bytes.L & (1 << 3)) == 0) {
+    die("This TCP/IP implementation does not support active TCP connections.");
+  }
+  
+  regs.Bytes.B = 0;
+  UnapiCall(codeBlock, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
+  /*TcpConnectionParameters->remotePort = HTTP_DEFAULT_PORT;*/
+  /*TcpConnectionParameters->localPort = 0xFFFF;*/
+  /*TcpConnectionParameters->userTimeout = 0;*/
+  /*TcpConnectionParameters->flags = 0;*/
+  debug("TCP/IP UNAPI initialized OK");
+}
+
+
+
+/*** UNAPI functions }}} ***/
+
 /*** functions {{{ ***/
 
 
@@ -439,6 +500,7 @@ void save_config(char* filename, char* value) {
   n = write(value, strlen(value), fp);
   buffer[0] = 0x1a;
   write(buffer, 1, fp);
+  debug("Save config: %s = %s", filename, value);
   close(fp);
 }
 
@@ -462,9 +524,14 @@ const char* get_config(char* filename) {
 
   n = read(buffer, sizeof(buffer), fp);
   close(fp);
-  debug("N: %d", n);
   buffer[n] = '\0';
+  debug("Read config: %s = %s", filename, buffer);
   return buffer;
+}
+
+void read_config(void) {
+  strcpy(progsdir, get_config("progsdir"));
+  strcpy(baseurl, get_config("BASEURL"));
 }
 
 /*** helper functions }}} ***/
@@ -472,7 +539,8 @@ const char* get_config(char* filename) {
 /*** commands {{{ ***/
 
 void install(char const *package) {
-  printf("TODO: install %s\r\n", package);
+  read_config();
+  init_unapi();
 }
 
 void configure(void) {

@@ -8,7 +8,7 @@ CC = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMA
 HEX2BIN = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} hex2bin
 INCLUDEDIR = include
 
-CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 -I$(INCLUDEDIR) $(INCLUDEDIR)/crt0msx_msxdos_advanced.rel
+CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 -I$(INCLUDEDIR) $(INCLUDEDIR)/crt0msx_msxdos_advanced.rel $(INCLUDEDIR)/asm.lib
 
 all: libs $(COM_FILES)
 
