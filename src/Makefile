@@ -36,6 +36,7 @@ clean: libsclean
 		-not -name 'NEXTORJP.SYS' \
 		-not -name 'AUTOEXEC.BAT' \
 		-delete || true
+	rm -rf dsk/hub dsk/config
 	rm -f *.com *.asm *.lst *.sym *.bin *.ihx *.lk *.map *.noi *.rel
 	rm -rf bin/
 	rm -f hub.zip
@@ -44,8 +45,9 @@ test: release
 	openmsx -machine msx2 -ext msxdos2 -diska dsk/ -script ../emulation/boot.tcl
 
 release: all
-	cp bin/hub.com dsk/
-	cp ../README.md dsk
+	mkdir -p dsk/hub
+	cp bin/hub.com dsk/hub
+	cp ../README.md dsk/hub
 	7z a hub.zip ./dsk/*
 
 # vim:ft=make
