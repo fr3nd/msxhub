@@ -518,6 +518,8 @@ void configure(void) {
   }
   save_config("PROGSDIR", progsdir);
 
+  save_config("BASEURL", "http://msxhub.com/files/");
+
   printf("Done! MSX Hub configured properly.\r\n");
 }
 
