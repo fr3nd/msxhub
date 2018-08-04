@@ -6,6 +6,7 @@
 
 #define MSXHUB_VERSION "0.0.1"
 
+// Enable or disable debug messages
 #define DEBUG 1
 
 /* BIOS calls */
@@ -26,7 +27,6 @@
 #define GENV    #0x6B
 #define DOSVER  #0x6F
 #define _EOF    0xC7
-#define EXTBIO  #0xFFCA
 
 /* DOS errors */
 #define NOFIL   0xD7
@@ -46,24 +46,58 @@
 
 #define DOSCALL  call 5
 #define BIOSCALL ld iy,(EXPTBL-1)\
-#define EXTBIOCALL call EXTBIO
+call CALSLT
+#define TCP_WAIT() UnapiCall(codeBlock, TCPIP_WAIT, &regs, REGS_NONE, REGS_NONE)
 
 #define HTTP_DEFAULT_PORT (80)
 
-enum TcpipUnapiFunctions {
-    UNAPI_GET_INFO = 0,
-    TCPIP_GET_CAPAB = 1,
-    TCPIP_NET_STATE = 3,
-    TCPIP_DNS_Q = 6,
-    TCPIP_DNS_S = 7,
-    TCPIP_TCP_OPEN = 13,
-    TCPIP_TCP_CLOSE = 14,
-    TCPIP_TCP_ABORT = 15,
-    TCPIP_TCP_STATE = 16,
-    TCPIP_TCP_SEND = 17,
-    TCPIP_TCP_RCV = 18,
-    TCPIP_WAIT = 29
-};
+/* UNAPI functions */
+#define UNAPI_GET_INFO  0
+#define TCPIP_GET_CAPAB 1
+#define TCPIP_NET_STATE 3
+#define TCPIP_DNS_Q     6
+#define TCPIP_DNS_S     7
+#define TCPIP_TCP_OPEN  13
+#define TCPIP_TCP_CLOSE 14
+#define TCPIP_TCP_ABORT 15
+#define TCPIP_TCP_STATE 16
+#define TCPIP_TCP_SEND  17
+#define TCPIP_TCP_RCV   18
+#define TCPIP_WAIT      29
+
+/* UNAPI error codes */
+#define ERR_OK           0
+#define ERR_NOT_IMP      1
+#define ERR_NO_NETWORK   2
+#define ERR_NO_DATA      3
+#define ERR_INV_PARAM    4
+#define ERR_QUERY_EXISTS 5
+#define ERR_INV_IP       6
+#define ERR_NO_DNS       7
+#define ERR_DNS          8
+#define ERR_NO_FREE_CONN 9
+#define ERR_CONN_EXISTS  10
+#define ERR_NO_CONN      11
+#define ERR_CONN_STATE   12
+#define ERR_BUFFER       13
+#define ERR_LARGE_DGRAM  14
+#define ERR_INV_OPER     15
+
+#define ERR_DNS_S_UNKNOWN      0
+#define ERR_DNS_S_INV_PACKET   1
+#define ERR_DNS_S_SERVER_FAIL  2
+#define ERR_DNS_S_NO_HOST      3
+#define ERR_DNS_S_UNSUPPORTED  4
+#define ERR_DNS_S_REFUSED      5
+#define ERR_DNS_S_NO_REPLY     16
+#define ERR_DNS_S_TIMEOUT      17
+#define ERR_DNS_S_CANCELLED    18
+#define ERR_DNS_S_NETWORK_LOST 19
+#define ERR_DNS_S_BAD_RESPONSE 20
+#define ERR_DNS_S_TRUNCATED    21
+
+
+typedef char ip_addr[4];
 
 /*** global variables {{{ ***/
 char configpath[255] = { '\0' };
@@ -363,14 +397,110 @@ char get_env(char* name, char* buffer, char buffer_size) __naked {
 
 /*** UNAPI functions {{{ ***/
 
+char *unapi_strerror (int errnum) {
+  switch(errnum) {
+    case ERR_OK:
+      return "Operation completed successfully.";
+    case ERR_NOT_IMP:
+      return "Capability not implemented in this TCP/IP UNAPI implementation.";
+    case ERR_NO_NETWORK:
+      return "No network connection available.";
+    case ERR_NO_DATA:
+      return "No incoming data available.";
+    case ERR_INV_PARAM:
+      return "Invalid input parameter.";
+    case ERR_QUERY_EXISTS:
+      return "Another query is already in progress.";
+    case ERR_INV_IP:
+      return "Invalid IP address.";
+    case ERR_NO_DNS:
+      return "No DNS servers are configured.";
+    case ERR_NO_FREE_CONN:
+      return "No free connections available.";
+    case ERR_CONN_EXISTS:
+      return "Connection already exists.";
+    case ERR_NO_CONN:
+      return "Connection does not exist.";
+    case ERR_CONN_STATE:
+      return "Invalid connection state.";
+    case ERR_BUFFER:
+      return "Insufficient output buffer space.";
+    case ERR_LARGE_DGRAM:
+      return "Datagram is too large.";
+    case ERR_INV_OPER:
+      return "Invalid operation.";
+    // >= 20 ERR_DNS DNS server error
+    case ERR_DNS_S_UNKNOWN + 20:
+      return "DNS server error: Unknown error.";
+    case ERR_DNS_S_INV_PACKET + 20:
+      return "DNS server error: Invalid query packet format.";
+    case ERR_DNS_S_SERVER_FAIL + 20:
+      return "DNS server error: DNS server failure.";
+    case ERR_DNS_S_NO_HOST + 20:
+      return "DNS server error: The specified host name does not exist.";
+    case ERR_DNS_S_UNSUPPORTED + 20:
+      return "DNS server error: The DNS server does not support this kind of query.";
+    case ERR_DNS_S_REFUSED + 20:
+      return "DNS server error: Query refused.";
+    case ERR_DNS_S_NO_REPLY + 20:
+      return "DNS server error: One of the queried DNS servers did not reply.";
+    case ERR_DNS_S_TIMEOUT + 20:
+      return "DNS server error: Total process timeout expired.";
+    case ERR_DNS_S_CANCELLED + 20:
+      return "DNS server error: Query cancelled by the user.";
+    case ERR_DNS_S_NETWORK_LOST + 20:
+      return "DNS server error: Network connectivity was lost during the process.";
+    case ERR_DNS_S_BAD_RESPONSE + 20:
+      return "DNS server error: The obtained reply did not contain REPLY nor AUTHORITATIVE.";
+    case ERR_DNS_S_TRUNCATED + 20:
+      return "DNS server error: The obtained reply is truncated.";
+  }
+  if (errnum >= 20) {
+    return "DNS server error: Undefined error.";
+  } else {
+    return "Invalid error.";
+  }
+}
+
+char getaddrinfo(char *hostname, ip_addr ip) {
+  regs.Words.HL = (int)hostname;
+  regs.Bytes.B = 0;
+  UnapiCall(codeBlock, TCPIP_DNS_Q, &regs, REGS_MAIN, REGS_MAIN);
+  if(regs.Bytes.A != 0) {
+    return regs.Bytes.A;
+  }
+
+  do {
+  /*  AbortIfEscIsPressed();*/
+    TCP_WAIT();
+    regs.Bytes.B = 0;
+    UnapiCall(codeBlock, TCPIP_DNS_S, &regs, REGS_MAIN, REGS_MAIN);
+  } while (regs.Bytes.A == 0 && regs.Bytes.B == 1);
+
+
+  // If there is an error during the query, return 20+ the query error
+  // This way it can be easily detected and extracted
+  if(regs.Bytes.A != 0) {
+    return 20 + regs.Bytes.B;
+  }
+
+  debug("resolve: %s %d.%d.%d.%d", hostname, regs.Bytes.L, regs.Bytes.H, regs.Bytes.E, regs.Bytes.D);
+  ip[0] = regs.Bytes.L;
+  ip[1] = regs.Bytes.H;
+  ip[2] = regs.Bytes.E;
+  ip[3] = regs.Bytes.D;
+  return 0;
+}
+
 
 void init_unapi(void) {
-  int i;
+  ip_addr ip;
+  char err_code;
 
   codeBlock = (unapi_code_block*)0x8300;
 
-  i = UnapiGetCount("TCP/IP");
-  if(i==0) {
+  err_code = UnapiGetCount("TCP/IP");
+  if(err_code == 0) {
     die("An UNAPI compatible network card is required to run this program.");
   }
   UnapiBuildCodeBlock(NULL, 1, codeBlock);
@@ -388,23 +518,26 @@ void init_unapi(void) {
   /*TcpConnectionParameters->userTimeout = 0;*/
   /*TcpConnectionParameters->flags = 0;*/
   debug("TCP/IP UNAPI initialized OK");
+  err_code = getaddrinfo("msxhub.com", ip);
+  if (err_code != 0) {
+    die(unapi_strerror(err_code));
+  }
+  printf("IP: %d.%d.%d.%d\r\n", ip[0], ip[1], ip[2], ip[3]);
 }
-
 
 
 /*** UNAPI functions }}} ***/
 
 /*** functions {{{ ***/
 
-
 void debug(const char *s, ...) {
-  if (DEBUG == 1) {
-    va_list ap;
-    va_start(ap, s);
-    printf("*** DEBUG: ");
-    vprintf(s, ap);
-    printf("\r\n");
-  }
+  #if DEBUG == 1
+  va_list ap;
+  va_start(ap, s);
+  printf("*** DEBUG: ");
+  vprintf(s, ap);
+  printf("\r\n");
+  #endif
 }
 
 // Based on https://github.com/svn2github/sdcc/blob/master/sdcc/device/lib/gets.c
@@ -477,6 +610,7 @@ void init(void) {
   p = parse_pathname(0, configpath);
   *((char*)p) = '\0';
   strcat(configpath, "CONFIG");
+  debug("Configpath: %s", configpath);
 }
 
 void save_config(char* filename, char* value) {
