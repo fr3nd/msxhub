@@ -102,6 +102,8 @@ call CALSLT
 #define ERR_CUSTOM_TIMEOUT 0
 
 #define TCP_TIMEOUT 10
+#define TCP_BUFFER_SIZE (1024)
+#define TCPOUT_STEP_SIZE (512)
 #define TICKS_TO_WAIT (20*60)
 #define SYSTIMER ((uint*)0xFC9E)
 
@@ -437,7 +439,7 @@ char *unapi_strerror (int errnum) {
     case ERR_CONN_EXISTS:
       return "Connection already exists.";
     case ERR_NO_CONN:
-      return "Connection does not exist.";
+      return "Connection does not exist or connection lost.";
     case ERR_CONN_STATE:
       return "Invalid connection state.";
     case ERR_BUFFER:
@@ -512,7 +514,7 @@ char getaddrinfo(char *hostname, ip_addr ip) {
   return 0;
 }
 
-char tcp_connect(char *hostname, unsigned int port, char* conn) {
+char tcp_connect(char *conn, char *hostname, unsigned int port) {
   int n;
   int sys_timer_hold;
 
@@ -576,6 +578,32 @@ char tcp_connect(char *hostname, unsigned int port, char* conn) {
 
 }
 
+char tcp_send(char *conn, char *data) {
+  int data_size;
+
+  data_size = strlen(data);
+
+  do {
+    do {
+      regs.Bytes.B = *conn;
+      regs.Words.DE = (int)data;
+      regs.Words.HL = data_size > TCPOUT_STEP_SIZE ? TCPOUT_STEP_SIZE : data_size;
+      regs.Bytes.C = 1;
+      UnapiCall(code_block, TCPIP_TCP_SEND, &regs, REGS_MAIN, REGS_AF);
+      if(regs.Bytes.A == ERR_BUFFER) {
+        TCP_WAIT();
+        regs.Bytes.A = ERR_BUFFER;
+      }
+    } while(regs.Bytes.A == ERR_BUFFER);
+    debug("tcp_send: sent %i bytes\r\n", regs.Words.HL);
+    data_size -= TCPOUT_STEP_SIZE;
+    data += regs.Words.HL;   //Unmodified since REGS_AF was used for output
+  } while(data_size > 0 && regs.Bytes.A == 0);
+
+  return regs.Bytes.A;
+
+}
+
 
 void init_unapi(void) {
   ip_addr ip;
@@ -602,15 +630,15 @@ void init_unapi(void) {
 
   regs.Bytes.B = 0;
   UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
-  /*TcpConnectionParameters->remotePort = HTTP_DEFAULT_PORT;*/
-  /*TcpConnectionParameters->localPort = 0xFFFF;*/
-  /*TcpConnectionParameters->userTimeout = 0;*/
-  /*TcpConnectionParameters->flags = 0;*/
   debug("TCP/IP UNAPI initialized OK");
-  err_code = tcp_connect("msxhub.com", 80, &conn);
+  err_code = tcp_connect(&conn, "192.168.1.110", 8001);
   if (err_code != 0) {
     die(unapi_strerror(err_code));
-  }
+  };
+  err_code = tcp_send(&conn, "GET /TEST\r\n");
+  if (err_code != 0) {
+    die(unapi_strerror(err_code));
+  };
 }
 
 
@@ -625,6 +653,7 @@ void debug(const char *s, ...) {
   printf("*** DEBUG: ");
   vprintf(s, ap);
   printf("\r\n");
+  va_end(ap);
   #endif
 }
 
