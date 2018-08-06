@@ -48,7 +48,7 @@
 #define DOSCALL  call 5
 #define BIOSCALL ld iy,(EXPTBL-1)\
 call CALSLT
-#define TCP_WAIT() UnapiCall(codeBlock, TCPIP_WAIT, &regs, REGS_NONE, REGS_NONE)
+#define TCP_WAIT() UnapiCall(code_block, TCPIP_WAIT, &regs, REGS_NONE, REGS_NONE)
 
 #define HTTP_DEFAULT_PORT (80)
 
@@ -120,7 +120,7 @@ char configpath[255] = { '\0' };
 char progsdir[255] = { '\0' };
 char baseurl[255] = { '\0' };
 Z80_registers regs;
-unapi_code_block *codeBlock;
+unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
 /*** global variables }}} ***/
 
@@ -485,7 +485,7 @@ char *unapi_strerror (int errnum) {
 char getaddrinfo(char *hostname, ip_addr ip) {
   regs.Words.HL = (int)hostname;
   regs.Bytes.B = 0;
-  UnapiCall(codeBlock, TCPIP_DNS_Q, &regs, REGS_MAIN, REGS_MAIN);
+  UnapiCall(code_block, TCPIP_DNS_Q, &regs, REGS_MAIN, REGS_MAIN);
   if(regs.Bytes.A != 0) {
     return regs.Bytes.A;
   }
@@ -494,7 +494,7 @@ char getaddrinfo(char *hostname, ip_addr ip) {
     // AbortIfEscIsPressed();
     TCP_WAIT();
     regs.Bytes.B = 0;
-    UnapiCall(codeBlock, TCPIP_DNS_S, &regs, REGS_MAIN, REGS_MAIN);
+    UnapiCall(code_block, TCPIP_DNS_S, &regs, REGS_MAIN, REGS_MAIN);
   } while (regs.Bytes.A == 0 && regs.Bytes.B == 1);
 
 
@@ -538,12 +538,12 @@ char tcp_connect(char *hostname, unsigned int port, char* conn) {
   debug("HL: %X", regs.Words.HL);
 
   // TODO FIX! invalid input parameter...
-  UnapiCall(codeBlock, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
+  UnapiCall(code_block, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
   if(regs.Bytes.A == (char)ERR_NO_FREE_CONN) {
     regs.Bytes.B = 0;
-    UnapiCall(codeBlock, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_NONE);
+    UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_NONE);
     regs.Words.HL = (int)parameters;
-    UnapiCall(codeBlock, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
+    UnapiCall(code_block, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
   }
 
   if(regs.Bytes.A != (char)ERR_OK) {
@@ -563,7 +563,7 @@ char tcp_connect(char *hostname, unsigned int port, char* conn) {
     }
     regs.Bytes.B = *conn;
     regs.Words.HL = 0;
-    UnapiCall(codeBlock, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
+    UnapiCall(code_block, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
   } while((regs.Bytes.A) == 0 && (regs.Bytes.B != 4));
 
   if(regs.Bytes.A != 0) {
@@ -583,25 +583,25 @@ void init_unapi(void) {
   char conn = 0;
 
   // FIXME Not sure why it doesn't work with malloc...
-  //codeBlock = malloc(sizeof(unapi_code_block));
+  //code_block = malloc(sizeof(unapi_code_block));
   //parameters = malloc(sizeof(unapi_connection_parameters));
-  codeBlock = (unapi_code_block*)0x8300;
+  code_block = (unapi_code_block*)0x8300;
   parameters = (unapi_connection_parameters*)0x8400;
 
   err_code = UnapiGetCount("TCP/IP");
   if(err_code == 0) {
     die("An UNAPI compatible network card is required to run this program.");
   }
-  UnapiBuildCodeBlock(NULL, 1, codeBlock);
+  UnapiBuildCodeBlock(NULL, 1, code_block);
 
   regs.Bytes.B = 1;
-  UnapiCall(codeBlock, TCPIP_GET_CAPAB, &regs, REGS_MAIN, REGS_MAIN);
+  UnapiCall(code_block, TCPIP_GET_CAPAB, &regs, REGS_MAIN, REGS_MAIN);
   if((regs.Bytes.L & (1 << 3)) == 0) {
     die("This TCP/IP implementation does not support active TCP connections.");
   }
 
   regs.Bytes.B = 0;
-  UnapiCall(codeBlock, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
+  UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   /*TcpConnectionParameters->remotePort = HTTP_DEFAULT_PORT;*/
   /*TcpConnectionParameters->localPort = 0xFFFF;*/
   /*TcpConnectionParameters->userTimeout = 0;*/
