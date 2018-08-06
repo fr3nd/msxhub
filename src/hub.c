@@ -604,6 +604,15 @@ char tcp_send(char *conn, char *data) {
 
 }
 
+char tcp_close(char *conn) {
+  if(conn != 0) {
+    regs.Bytes.B = *conn;
+    UnapiCall(code_block, TCPIP_TCP_CLOSE, &regs, REGS_MAIN, REGS_NONE);
+    conn = 0;
+  }
+  return ERR_OK;
+}
+
 
 void init_unapi(void) {
   ip_addr ip;
