@@ -120,7 +120,8 @@ char configpath[255] = { '\0' };
 char progsdir[255] = { '\0' };
 char baseurl[255] = { '\0' };
 Z80_registers regs;
-unapi_code_block* codeBlock;
+unapi_code_block *codeBlock;
+unapi_connection_parameters *parameters;
 /*** global variables }}} ***/
 
 /*** prototypes {{{ ***/
@@ -512,7 +513,6 @@ char getaddrinfo(char *hostname, ip_addr ip) {
 }
 
 char tcp_connect(char *hostname, unsigned int port, char* conn) {
-  unapi_connection_parameters *parameters = malloc(sizeof(unapi_connection_parameters));
   int n;
   int sys_timer_hold;
 
@@ -533,11 +533,8 @@ char tcp_connect(char *hostname, unsigned int port, char* conn) {
   debug("- local_port: 0x%X", parameters->local_port);
   debug("- user_timeout: %d", parameters->user_timeout);
   debug("- flags: 0x%X", parameters->flags);
-  debug("PA: %X", (int)&parameters);
-  debug("PA: %X", parameters);
-  debug("PA: %X", &parameters);
 
-  regs.Words.HL = (int)&parameters;
+  regs.Words.HL = (int)parameters;
   debug("HL: %X", regs.Words.HL);
 
   // TODO FIX! invalid input parameter...
@@ -568,7 +565,6 @@ char tcp_connect(char *hostname, unsigned int port, char* conn) {
     regs.Words.HL = 0;
     UnapiCall(codeBlock, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
   } while((regs.Bytes.A) == 0 && (regs.Bytes.B != 4));
-  debug("4");
 
   if(regs.Bytes.A != 0) {
     debug("Error connecting: %i", regs.Bytes.A);
@@ -586,7 +582,11 @@ void init_unapi(void) {
   char err_code;
   char conn = 0;
 
+  // FIXME Not sure why it doesn't work with malloc...
+  //codeBlock = malloc(sizeof(unapi_code_block));
+  //parameters = malloc(sizeof(unapi_connection_parameters));
   codeBlock = (unapi_code_block*)0x8300;
+  parameters = (unapi_connection_parameters*)0x8400;
 
   err_code = UnapiGetCount("TCP/IP");
   if(err_code == 0) {
@@ -599,7 +599,7 @@ void init_unapi(void) {
   if((regs.Bytes.L & (1 << 3)) == 0) {
     die("This TCP/IP implementation does not support active TCP connections.");
   }
-  
+
   regs.Bytes.B = 0;
   UnapiCall(codeBlock, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   /*TcpConnectionParameters->remotePort = HTTP_DEFAULT_PORT;*/
@@ -608,11 +608,9 @@ void init_unapi(void) {
   /*TcpConnectionParameters->flags = 0;*/
   debug("TCP/IP UNAPI initialized OK");
   err_code = tcp_connect("msxhub.com", 80, &conn);
-  //err_code = getaddrinfo("msxhub.com", ip);
   if (err_code != 0) {
     die(unapi_strerror(err_code));
   }
-  printf("IP: %d.%d.%d.%d\r\n", ip[0], ip[1], ip[2], ip[3]);
 }
 
 
