@@ -1,4 +1,5 @@
 // vim:foldmethod=marker:foldlevel=0
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -83,6 +84,7 @@ call CALSLT
 #define ERR_LARGE_DGRAM  14
 #define ERR_INV_OPER     15
 
+#define ERR_DNS_S              20
 #define ERR_DNS_S_UNKNOWN      0
 #define ERR_DNS_S_INV_PACKET   1
 #define ERR_DNS_S_SERVER_FAIL  2
@@ -96,8 +98,22 @@ call CALSLT
 #define ERR_DNS_S_BAD_RESPONSE 20
 #define ERR_DNS_S_TRUNCATED    21
 
+#define ERR_CUSTOM         100
+#define ERR_CUSTOM_TIMEOUT 0
+
+#define TCP_TIMEOUT 10
+#define TICKS_TO_WAIT (20*60)
+#define SYSTIMER ((uint*)0xFC9E)
 
 typedef char ip_addr[4];
+
+typedef struct {
+    ip_addr remote_ip;
+    unsigned int remote_port;
+    unsigned int local_port;
+    int user_timeout;
+    char flags;
+} unapi_connection_parameters;
 
 /*** global variables {{{ ***/
 char configpath[255] = { '\0' };
@@ -430,32 +446,35 @@ char *unapi_strerror (int errnum) {
     case ERR_INV_OPER:
       return "Invalid operation.";
     // >= 20 ERR_DNS DNS server error
-    case ERR_DNS_S_UNKNOWN + 20:
+    case ERR_DNS_S_UNKNOWN + ERR_DNS_S:
       return "DNS server error: Unknown error.";
-    case ERR_DNS_S_INV_PACKET + 20:
+    case ERR_DNS_S_INV_PACKET + ERR_DNS_S:
       return "DNS server error: Invalid query packet format.";
-    case ERR_DNS_S_SERVER_FAIL + 20:
+    case ERR_DNS_S_SERVER_FAIL + ERR_DNS_S:
       return "DNS server error: DNS server failure.";
-    case ERR_DNS_S_NO_HOST + 20:
+    case ERR_DNS_S_NO_HOST + ERR_DNS_S:
       return "DNS server error: The specified host name does not exist.";
-    case ERR_DNS_S_UNSUPPORTED + 20:
+    case ERR_DNS_S_UNSUPPORTED + ERR_DNS_S:
       return "DNS server error: The DNS server does not support this kind of query.";
-    case ERR_DNS_S_REFUSED + 20:
+    case ERR_DNS_S_REFUSED + ERR_DNS_S:
       return "DNS server error: Query refused.";
-    case ERR_DNS_S_NO_REPLY + 20:
+    case ERR_DNS_S_NO_REPLY + ERR_DNS_S:
       return "DNS server error: One of the queried DNS servers did not reply.";
-    case ERR_DNS_S_TIMEOUT + 20:
+    case ERR_DNS_S_TIMEOUT + ERR_DNS_S:
       return "DNS server error: Total process timeout expired.";
-    case ERR_DNS_S_CANCELLED + 20:
+    case ERR_DNS_S_CANCELLED + ERR_DNS_S:
       return "DNS server error: Query cancelled by the user.";
-    case ERR_DNS_S_NETWORK_LOST + 20:
+    case ERR_DNS_S_NETWORK_LOST + ERR_DNS_S:
       return "DNS server error: Network connectivity was lost during the process.";
-    case ERR_DNS_S_BAD_RESPONSE + 20:
+    case ERR_DNS_S_BAD_RESPONSE + ERR_DNS_S:
       return "DNS server error: The obtained reply did not contain REPLY nor AUTHORITATIVE.";
-    case ERR_DNS_S_TRUNCATED + 20:
+    case ERR_DNS_S_TRUNCATED + ERR_DNS_S:
       return "DNS server error: The obtained reply is truncated.";
+    // >= 100 Custom errors
+    case ERR_CUSTOM_TIMEOUT + ERR_CUSTOM:
+      return "Connection timeout.";
   }
-  if (errnum >= 20) {
+  if (errnum >= ERR_DNS_S) {
     return "DNS server error: Undefined error.";
   } else {
     return "Invalid error.";
@@ -471,7 +490,7 @@ char getaddrinfo(char *hostname, ip_addr ip) {
   }
 
   do {
-  /*  AbortIfEscIsPressed();*/
+    // AbortIfEscIsPressed();
     TCP_WAIT();
     regs.Bytes.B = 0;
     UnapiCall(codeBlock, TCPIP_DNS_S, &regs, REGS_MAIN, REGS_MAIN);
@@ -481,7 +500,7 @@ char getaddrinfo(char *hostname, ip_addr ip) {
   // If there is an error during the query, return 20+ the query error
   // This way it can be easily detected and extracted
   if(regs.Bytes.A != 0) {
-    return 20 + regs.Bytes.B;
+    return ERR_DNS_S + regs.Bytes.B;
   }
 
   debug("resolve: %s %d.%d.%d.%d", hostname, regs.Bytes.L, regs.Bytes.H, regs.Bytes.E, regs.Bytes.D);
@@ -492,10 +511,80 @@ char getaddrinfo(char *hostname, ip_addr ip) {
   return 0;
 }
 
+char tcp_connect(char *hostname, unsigned int port, char* conn) {
+  unapi_connection_parameters *parameters = malloc(sizeof(unapi_connection_parameters));
+  int n;
+  int sys_timer_hold;
+
+  debug("Connecting to %s:%d... ", hostname, port);
+  getaddrinfo(hostname, parameters->remote_ip);
+  parameters->remote_port = port;
+  parameters->local_port = 0xFFFF;
+  parameters->user_timeout = TCP_TIMEOUT;
+  parameters->flags = 0;
+
+  debug("Connection parameters:");
+  debug("- remote_ip: %d.%d.%d.%d",
+      parameters->remote_ip[0],
+      parameters->remote_ip[1],
+      parameters->remote_ip[2],
+      parameters->remote_ip[3]);
+  debug("- remote_port: %d", parameters->remote_port);
+  debug("- local_port: 0x%X", parameters->local_port);
+  debug("- user_timeout: %d", parameters->user_timeout);
+  debug("- flags: 0x%X", parameters->flags);
+  debug("PA: %X", (int)&parameters);
+  debug("PA: %X", parameters);
+  debug("PA: %X", &parameters);
+
+  regs.Words.HL = (int)&parameters;
+  debug("HL: %X", regs.Words.HL);
+
+  // TODO FIX! invalid input parameter...
+  UnapiCall(codeBlock, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
+  if(regs.Bytes.A == (char)ERR_NO_FREE_CONN) {
+    regs.Bytes.B = 0;
+    UnapiCall(codeBlock, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_NONE);
+    regs.Words.HL = (int)parameters;
+    UnapiCall(codeBlock, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
+  }
+
+  if(regs.Bytes.A != (char)ERR_OK) {
+    return regs.Bytes.A;
+  }
+  *conn = regs.Bytes.B;
+
+  n = 0;
+  do {
+    // AbortIfEscIsPressed();
+    sys_timer_hold = *SYSTIMER;
+    TCP_WAIT();
+    while(*SYSTIMER == sys_timer_hold);
+    n++;
+    if(n >= TICKS_TO_WAIT) {
+      return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
+    }
+    regs.Bytes.B = *conn;
+    regs.Words.HL = 0;
+    UnapiCall(codeBlock, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
+  } while((regs.Bytes.A) == 0 && (regs.Bytes.B != 4));
+  debug("4");
+
+  if(regs.Bytes.A != 0) {
+    debug("Error connecting: %i", regs.Bytes.A);
+    return regs.Bytes.A;
+  }
+
+  debug("Connection established");
+  return ERR_OK;
+
+}
+
 
 void init_unapi(void) {
   ip_addr ip;
   char err_code;
+  char conn = 0;
 
   codeBlock = (unapi_code_block*)0x8300;
 
@@ -518,7 +607,8 @@ void init_unapi(void) {
   /*TcpConnectionParameters->userTimeout = 0;*/
   /*TcpConnectionParameters->flags = 0;*/
   debug("TCP/IP UNAPI initialized OK");
-  err_code = getaddrinfo("msxhub.com", ip);
+  err_code = tcp_connect("msxhub.com", 80, &conn);
+  //err_code = getaddrinfo("msxhub.com", ip);
   if (err_code != 0) {
     die(unapi_strerror(err_code));
   }
