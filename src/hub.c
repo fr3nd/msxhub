@@ -484,6 +484,12 @@ char *unapi_strerror (int errnum) {
   }
 }
 
+void run_or_die(int err_code) {
+  if (err_code != 0) {
+    die(unapi_strerror(err_code));
+  }
+}
+
 char getaddrinfo(char *hostname, ip_addr ip) {
   regs.Words.HL = (int)hostname;
   regs.Bytes.B = 0;
@@ -640,14 +646,10 @@ void init_unapi(void) {
   regs.Bytes.B = 0;
   UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   debug("TCP/IP UNAPI initialized OK");
-  err_code = tcp_connect(&conn, "192.168.1.110", 8001);
-  if (err_code != 0) {
-    die(unapi_strerror(err_code));
-  };
-  err_code = tcp_send(&conn, "GET /TEST\r\n");
-  if (err_code != 0) {
-    die(unapi_strerror(err_code));
-  };
+
+  run_or_die(tcp_connect(&conn, "192.168.1.110", 8000));
+  run_or_die(tcp_send(&conn, "GET /test\r\n"));
+  run_or_die(tcp_close(&conn));
 }
 
 
