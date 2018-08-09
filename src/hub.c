@@ -124,6 +124,7 @@ char baseurl[255] = { '\0' };
 Z80_registers regs;
 unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
+char *data_buffer;
 /*** global variables }}} ***/
 
 /*** prototypes {{{ ***/
@@ -591,6 +592,7 @@ char tcp_send(char *conn, char *data) {
 
   do {
     do {
+      // AbortIfEscIsPressed();
       regs.Bytes.B = *conn;
       regs.Words.DE = (int)data;
       regs.Words.HL = data_size > TCPOUT_STEP_SIZE ? TCPOUT_STEP_SIZE : data_size;
@@ -601,7 +603,7 @@ char tcp_send(char *conn, char *data) {
         regs.Bytes.A = ERR_BUFFER;
       }
     } while(regs.Bytes.A == ERR_BUFFER);
-    debug("tcp_send: sent %i bytes\r\n", regs.Words.HL);
+    debug("tcp_send: sent %i bytes", regs.Words.HL);
     data_size -= TCPOUT_STEP_SIZE;
     data += regs.Words.HL;   //Unmodified since REGS_AF was used for output
   } while(data_size > 0 && regs.Bytes.A == 0);
@@ -610,12 +612,47 @@ char tcp_send(char *conn, char *data) {
 
 }
 
+int tcp_get(char *conn, char *data) {
+  int n;
+  int sys_timer_hold;
+
+  n = 0;
+
+  while(1) {
+    // AbortIfEscIsPressed();
+    sys_timer_hold = *SYSTIMER;
+    TCP_WAIT();
+    while(*SYSTIMER == sys_timer_hold);
+    n++;
+    if(n >= TICKS_TO_WAIT) {
+      return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
+    }
+    regs.Bytes.B = *conn;
+    regs.Words.DE = (int)data + 2;
+    regs.Words.HL = TCP_BUFFER_SIZE;
+    UnapiCall(code_block, TCPIP_TCP_RCV, &regs, REGS_MAIN, REGS_MAIN);
+    if(regs.Bytes.A != 0) {
+      return regs.Bytes.A;
+    } else {
+      if (regs.UWords.BC != 0) {
+        // TODO Implement urgent data
+        // Put the size of the data in the first two bytes
+        data[0] = (regs.UWords.BC);
+        data[1] = (regs.UWords.BC >> 8);
+        debug("tcp_get: received %i bytes", regs.UWords.BC);
+        return 0;
+      }
+    }
+  }
+}
+
 char tcp_close(char *conn) {
   if(conn != 0) {
     regs.Bytes.B = *conn;
     UnapiCall(code_block, TCPIP_TCP_CLOSE, &regs, REGS_MAIN, REGS_NONE);
     conn = 0;
   }
+  // TODO Handle errors
   return ERR_OK;
 }
 
@@ -624,12 +661,15 @@ void init_unapi(void) {
   ip_addr ip;
   char err_code;
   char conn = 0;
+  int n;
+  int data_received;
 
   // FIXME Not sure why it doesn't work with malloc...
   //code_block = malloc(sizeof(unapi_code_block));
   //parameters = malloc(sizeof(unapi_connection_parameters));
-  code_block = (unapi_code_block*)0x8300;
-  parameters = (unapi_connection_parameters*)0x8400;
+  code_block = (unapi_code_block*)0x8200;
+  parameters = (unapi_connection_parameters*)0x8300;
+  data_buffer = (char*)0x8400; // First two chars are size (int)
 
   err_code = UnapiGetCount("TCP/IP");
   if(err_code == 0) {
@@ -648,7 +688,15 @@ void init_unapi(void) {
   debug("TCP/IP UNAPI initialized OK");
 
   run_or_die(tcp_connect(&conn, "192.168.1.110", 8000));
-  run_or_die(tcp_send(&conn, "GET /test\r\n"));
+  run_or_die(tcp_send(&conn, "GET /test\r\n\r\n"));
+  do {
+    run_or_die(tcp_get(&conn, data_buffer));
+    data_received = (int)(data_buffer[0] | data_buffer[1] << 8);
+    for (n = 0; n < data_received; n++) {
+      printf("%c", data_buffer[n+2]);
+    }
+  } while (data_received == TCP_BUFFER_SIZE);
+
   run_or_die(tcp_close(&conn));
 }
 
