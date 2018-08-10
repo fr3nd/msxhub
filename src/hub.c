@@ -103,6 +103,7 @@ call CALSLT
 
 #define TCP_TIMEOUT 10
 #define TCP_BUFFER_SIZE (1024)
+#define MAX_HEADER_SIZE (256)
 #define TCPOUT_STEP_SIZE (512)
 #define TICKS_TO_WAIT (20*60)
 #define SYSTIMER ((uint*)0xFC9E)
@@ -117,19 +118,26 @@ typedef struct {
     char flags;
 } unapi_connection_parameters;
 
+typedef struct {
+  unsigned long content_length;
+} headers_info_t;
+
 /*** global variables {{{ ***/
+char msxdosver;
 char configpath[255] = { '\0' };
 char progsdir[255] = { '\0' };
 char baseurl[255] = { '\0' };
 Z80_registers regs;
 unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
+headers_info_t headers_info;
 char *data_buffer;
 /*** global variables }}} ***/
 
 /*** prototypes {{{ ***/
 void die(const char *s, ...);
 void debug(const char *s, ...);
+void debug_nocrlf(const char *s, ...);
 /*** prototypes }}} ***/
 
 /*** DOS functions {{{ ***/
@@ -544,7 +552,6 @@ char tcp_connect(char *conn, char *hostname, unsigned int port) {
   debug("- flags: 0x%X", parameters->flags);
 
   regs.Words.HL = (int)parameters;
-  debug("HL: %X", regs.Words.HL);
 
   // TODO FIX! invalid input parameter...
   UnapiCall(code_block, TCPIP_TCP_OPEN, &regs, REGS_MAIN, REGS_MAIN);
@@ -603,7 +610,7 @@ char tcp_send(char *conn, char *data) {
         regs.Bytes.A = ERR_BUFFER;
       }
     } while(regs.Bytes.A == ERR_BUFFER);
-    debug("tcp_send: sent %i bytes", regs.Words.HL);
+    debug_nocrlf("> %s", data);
     data_size -= TCPOUT_STEP_SIZE;
     data += regs.Words.HL;   //Unmodified since REGS_AF was used for output
   } while(data_size > 0 && regs.Bytes.A == 0);
@@ -612,7 +619,25 @@ char tcp_send(char *conn, char *data) {
 
 }
 
-int tcp_get(char *conn, char *data) {
+char http_send(char *conn, char *hostname, unsigned int port, char *method, char *path) {
+  char buffer[128];
+
+  run_or_die(tcp_connect(conn, hostname, port));
+
+  sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
+  run_or_die(tcp_send(conn, buffer));
+
+  sprintf(buffer, "Host: %s\r\n", hostname);
+  run_or_die(tcp_send(conn, buffer));
+
+  sprintf(buffer, "User-Agent: MsxHub %s (MSX-DOS %i)\r\n", MSXHUB_VERSION, msxdosver);
+  run_or_die(tcp_send(conn, buffer));
+
+  run_or_die(tcp_send(conn, "\r\n"));
+  return 0;
+}
+
+char tcp_get(char *conn, char *data) {
   int n;
   int sys_timer_hold;
 
@@ -644,6 +669,42 @@ int tcp_get(char *conn, char *data) {
       }
     }
   }
+}
+
+char http_get_headers(char *conn, headers_info_t *headers_info) {
+  int n, m;
+  int data_received;
+  char header[MAX_HEADER_SIZE];
+  char empty_line;
+
+  do { // Repeat until an empty line is detected (end of headers)
+    do { // Repeat until there is no more data
+      run_or_die(tcp_get(conn, data_buffer));
+      data_received = (int)(data_buffer[0] | data_buffer[1] << 8);
+      n = 0;
+      empty_line = 0;
+      do {
+        m = 0;
+        while (data_buffer[n+2] != '\n') { // while not end of header
+          if (data_buffer[n+2] != '\r') { // ignore \r
+            header[m] = data_buffer[n+2];
+            m++;
+          }
+          n++;
+        }
+
+        header[m] = '\0';
+        if (m == 0) {
+          empty_line = 1;
+        } else {
+          n++;
+          debug("< %s", header);
+        }
+      } while (n < data_received && empty_line != 1);
+    } while (data_received == TCP_BUFFER_SIZE && empty_line == 0);
+  } while (empty_line != 1);
+
+  return ERR_OK;
 }
 
 char tcp_close(char *conn) {
@@ -687,26 +748,25 @@ void init_unapi(void) {
   UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   debug("TCP/IP UNAPI initialized OK");
 
-  run_or_die(tcp_connect(&conn, "192.168.1.110", 8000));
-  run_or_die(tcp_send(&conn, "GET /test\r\n\r\n"));
-  do {
-    run_or_die(tcp_get(&conn, data_buffer));
-    data_received = (int)(data_buffer[0] | data_buffer[1] << 8);
-    for (n = 0; n < data_received; n++) {
-      printf("%c", data_buffer[n+2]);
-    }
-  } while (data_received == TCP_BUFFER_SIZE);
+  run_or_die(http_send(&conn, "192.168.1.110", 8000, "GET", "/test"));
+  run_or_die(http_get_headers(&conn, &headers_info));
+  /*do {*/
+  /*  run_or_die(tcp_get(&conn, data_buffer));*/
+  /*  data_received = (int)(data_buffer[0] | data_buffer[1] << 8);*/
+  /*  for (n = 0; n < data_received; n++) {*/
+  /*    printf("%c", data_buffer[n+2]);*/
+  /*  }*/
+  /*} while (data_received == TCP_BUFFER_SIZE);*/
 
   run_or_die(tcp_close(&conn));
 }
-
 
 /*** UNAPI functions }}} ***/
 
 /*** functions {{{ ***/
 
 void debug(const char *s, ...) {
-  #if DEBUG == 1
+  #if DEBUG != 0
   va_list ap;
   va_start(ap, s);
   printf("*** DEBUG: ");
@@ -715,6 +775,17 @@ void debug(const char *s, ...) {
   va_end(ap);
   #endif
 }
+
+void debug_nocrlf(const char *s, ...) {
+  #if DEBUG != 0
+  va_list ap;
+  va_start(ap, s);
+  printf("*** DEBUG: ");
+  vprintf(s, ap);
+  va_end(ap);
+  #endif
+}
+
 
 // Based on https://github.com/svn2github/sdcc/blob/master/sdcc/device/lib/gets.c
 char* gets (char *s) {
@@ -777,7 +848,8 @@ void init(void) {
   int p;
 
   // Check MSX-DOS version >= 2
-  if(dosver() < 2) {
+  msxdosver = dosver();
+  if(msxdosver < 2) {
     die("This program requires MSX-DOS 2 to run.");
   }
 
