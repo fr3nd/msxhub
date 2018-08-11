@@ -7,9 +7,6 @@
 
 #define MSXHUB_VERSION "0.0.1"
 
-// Enable or disable debug messages
-#define DEBUG 1
-
 /* BIOS calls */
 #define EXPTBL #0xFCC1
 
@@ -131,6 +128,7 @@ typedef struct {
 } headers_info_t;
 
 /*** global variables {{{ ***/
+char DEBUG;
 char msxdosver;
 char unapiver[90];
 char configpath[255] = { '\0' };
@@ -877,24 +875,24 @@ void init_unapi(void) {
 /*** functions {{{ ***/
 
 void debug(const char *s, ...) {
-  #if DEBUG != 0
-  va_list ap;
-  va_start(ap, s);
-  printf("*** DEBUG: ");
-  vprintf(s, ap);
-  printf("\r\n");
-  va_end(ap);
-  #endif
+  if (DEBUG != 0) {
+    va_list ap;
+    va_start(ap, s);
+    printf("*** DEBUG: ");
+    vprintf(s, ap);
+    printf("\r\n");
+    va_end(ap);
+  }
 }
 
 void debug_nocrlf(const char *s, ...) {
-  #if DEBUG != 0
-  va_list ap;
-  va_start(ap, s);
-  printf("*** DEBUG: ");
-  vprintf(s, ap);
-  va_end(ap);
-  #endif
+  if (DEBUG != 0) {
+    va_list ap;
+    va_start(ap, s);
+    printf("*** DEBUG: ");
+    vprintf(s, ap);
+    va_end(ap);
+  }
 }
 
 // https://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
@@ -976,6 +974,8 @@ void usage() {
 
 void init(void) {
   int p;
+
+  DEBUG = 0;
 
   // Check MSX-DOS version >= 2
   msxdosver = dosver();
@@ -1125,6 +1125,9 @@ int main(char **argv, int argc) {
   for (i = 0; i < argc; i++) {
     if (argv[i][0] == '/') {
       switch (argv[i][1]) {
+        case 'd':
+          DEBUG = 1;
+          break;
         case 'h':
           help("");
           break;
