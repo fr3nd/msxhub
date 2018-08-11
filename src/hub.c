@@ -119,6 +119,12 @@ typedef struct {
 } unapi_connection_parameters;
 
 typedef struct {
+  int size;
+  char data[TCP_BUFFER_SIZE];
+
+} data_buffer_t;
+
+typedef struct {
   unsigned int status_code;
   unsigned long content_length;
 } headers_info_t;
@@ -133,7 +139,7 @@ Z80_registers regs;
 unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
 headers_info_t headers_info;
-char *data_buffer;
+data_buffer_t *data_buffer;
 /*** global variables }}} ***/
 
 /*** prototypes {{{ ***/
@@ -685,7 +691,7 @@ void parse_header(char *header, char *title, char *value) {
   }
 }
 
-char tcp_get(char *conn, char *data) {
+char tcp_get(char *conn, data_buffer_t *data_buffer) {
   int n;
   int sys_timer_hold;
 
@@ -701,7 +707,7 @@ char tcp_get(char *conn, char *data) {
       return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
     }
     regs.Bytes.B = *conn;
-    regs.Words.DE = (int)data + 2;
+    regs.Words.DE = (int)data_buffer->data;
     regs.Words.HL = TCP_BUFFER_SIZE;
     UnapiCall(code_block, TCPIP_TCP_RCV, &regs, REGS_MAIN, REGS_MAIN);
     if(regs.Bytes.A != 0) {
@@ -709,9 +715,7 @@ char tcp_get(char *conn, char *data) {
     } else {
       if (regs.UWords.BC != 0) {
         // TODO Implement urgent data
-        // Put the size of the data in the first two bytes
-        data[0] = (regs.UWords.BC);
-        data[1] = (regs.UWords.BC >> 8);
+        data_buffer->size = regs.UWords.BC;
         debug("tcp_get: received %i bytes", regs.UWords.BC);
         return 0;
       }
@@ -731,14 +735,14 @@ char http_get_headers(char *conn) {
   do { // Repeat until an empty line is detected (end of headers)
     do { // Repeat until there is no more data
       run_or_die(tcp_get(conn, data_buffer));
-      data_received = (int)(data_buffer[0] | data_buffer[1] << 8);
+      data_received = (int)data_buffer->size;
       n = 0;
       empty_line = 0;
       do {
         m = 0;
-        while (data_buffer[n+2] != '\n') { // while not end of header
-          if (data_buffer[n+2] != '\r') { // ignore \r
-            header[m] = data_buffer[n+2];
+        while (data_buffer->data[n] != '\n') { // while not end of header
+          if (data_buffer->data[n] != '\r') { // ignore \r
+            header[m] = data_buffer->data[n];
             m++;
           }
           n++;
@@ -820,7 +824,7 @@ void init_unapi(void) {
   //parameters = malloc(sizeof(unapi_connection_parameters));
   code_block = (unapi_code_block*)0x8200;
   parameters = (unapi_connection_parameters*)0x8300;
-  data_buffer = (char*)0x8400; // First two chars are size (int)
+  data_buffer = (data_buffer_t*)0x8400;
 
   err_code = UnapiGetCount("TCP/IP");
   if(err_code == 0) {
