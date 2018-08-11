@@ -124,6 +124,7 @@ typedef struct {
 
 /*** global variables {{{ ***/
 char msxdosver;
+char unapiver[90];
 char configpath[255] = { '\0' };
 char progsdir[255] = { '\0' };
 char baseurl[255] = { '\0' };
@@ -630,7 +631,7 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
   sprintf(buffer, "Host: %s\r\n", hostname);
   run_or_die(tcp_send(conn, buffer));
 
-  sprintf(buffer, "User-Agent: MsxHub %s (MSX-DOS %i)\r\n", MSXHUB_VERSION, msxdosver);
+  sprintf(buffer, "User-Agent: MsxHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
   run_or_die(tcp_send(conn, buffer));
 
   run_or_die(tcp_send(conn, "\r\n"));
@@ -717,6 +718,30 @@ char tcp_close(char *conn) {
   return ERR_OK;
 }
 
+void get_unapi_version_string(char *unapiver) {
+  char c;
+  byte version_main;
+  byte version_sec;
+  uint name_address;
+  char buffer[80];
+  int n;
+
+  UnapiCall(code_block, UNAPI_GET_INFO, &regs, REGS_NONE, REGS_MAIN);
+  version_main = regs.Bytes.B;
+  version_sec = regs.Bytes.C;
+  name_address = regs.UWords.HL;
+
+  n = 0;
+  do {
+    c = UnapiRead(code_block, name_address);
+    buffer[n] = c;
+    name_address++;
+    n++;
+  } while (c != '\0');
+
+  sprintf(unapiver, "%s v%i.%i", buffer, version_main, version_sec);
+  debug("%s", unapiver);
+}
 
 void init_unapi(void) {
   ip_addr ip;
@@ -747,7 +772,7 @@ void init_unapi(void) {
   regs.Bytes.B = 0;
   UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   debug("TCP/IP UNAPI initialized OK");
-
+  get_unapi_version_string(unapiver);
   run_or_die(http_send(&conn, "192.168.1.110", 8000, "GET", "/test"));
   run_or_die(http_get_headers(&conn, &headers_info));
   /*do {*/
