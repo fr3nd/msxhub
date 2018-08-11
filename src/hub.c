@@ -119,6 +119,7 @@ typedef struct {
 } unapi_connection_parameters;
 
 typedef struct {
+  unsigned int status_code;
   unsigned long content_length;
 } headers_info_t;
 
@@ -634,8 +635,28 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
   sprintf(buffer, "User-Agent: MsxHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
   run_or_die(tcp_send(conn, buffer));
 
+  run_or_die(tcp_send(conn, "Accept: */*\r\n"));
+
   run_or_die(tcp_send(conn, "\r\n"));
   return 0;
+}
+
+void parse_response(char *header) {
+  char buffer[MAX_HEADER_SIZE];
+  char *token;
+  int n;
+
+  strcpy(buffer, header);
+
+  n = 0;
+  token = strtok(buffer," ");
+  while( token != NULL ) {
+    if (n == 1) {
+      headers_info.status_code = (unsigned int)atoi(token);
+    }
+    token = strtok(NULL, " ");
+    n++;
+  }
 }
 
 char tcp_get(char *conn, char *data) {
@@ -673,11 +694,12 @@ char tcp_get(char *conn, char *data) {
 }
 
 char http_get_headers(char *conn, headers_info_t *headers_info) {
-  int n, m;
+  int n, m, x;
   int data_received;
   char header[MAX_HEADER_SIZE];
   char empty_line;
 
+  x = 0;
   do { // Repeat until an empty line is detected (end of headers)
     do { // Repeat until there is no more data
       run_or_die(tcp_get(conn, data_buffer));
@@ -700,7 +722,11 @@ char http_get_headers(char *conn, headers_info_t *headers_info) {
         } else {
           n++;
           debug("< %s", header);
+          if (x == 0) { // first header received
+            parse_response(header);
+          }
         }
+        x++;
       } while (n < data_received && empty_line != 1);
     } while (data_received == TCP_BUFFER_SIZE && empty_line == 0);
   } while (empty_line != 1);
