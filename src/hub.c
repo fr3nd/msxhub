@@ -120,6 +120,7 @@ typedef struct {
 
 typedef struct {
   int size;
+  int current_pos;
   char data[TCP_BUFFER_SIZE];
 
 } data_buffer_t;
@@ -724,8 +725,7 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
 }
 
 char http_get_headers(char *conn) {
-  int n, m, x;
-  int data_received;
+  int m, x;
   char header[MAX_HEADER_SIZE];
   char title[MAX_HEADER_SIZE];
   char value[MAX_HEADER_SIZE];
@@ -735,24 +735,23 @@ char http_get_headers(char *conn) {
   do { // Repeat until an empty line is detected (end of headers)
     do { // Repeat until there is no more data
       run_or_die(tcp_get(conn, data_buffer));
-      data_received = (int)data_buffer->size;
-      n = 0;
+      data_buffer->current_pos = 0;
       empty_line = 0;
       do {
         m = 0;
-        while (data_buffer->data[n] != '\n') { // while not end of header
-          if (data_buffer->data[n] != '\r') { // ignore \r
-            header[m] = data_buffer->data[n];
+        while (data_buffer->data[data_buffer->current_pos] != '\n') { // while not end of header
+          if (data_buffer->data[data_buffer->current_pos] != '\r') { // ignore \r
+            header[m] = data_buffer->data[data_buffer->current_pos];
             m++;
           }
-          n++;
+          data_buffer->current_pos++;
         }
 
         header[m] = '\0';
         if (m == 0) {
           empty_line = 1;
         } else {
-          n++;
+          data_buffer->current_pos++;
           debug("< %s", header);
           if (x == 0) { // first header received
             parse_response(header);
@@ -765,9 +764,28 @@ char http_get_headers(char *conn) {
           }
         }
         x++;
-      } while (n < data_received && empty_line != 1);
-    } while (data_received == TCP_BUFFER_SIZE && empty_line == 0);
+      } while (data_buffer->current_pos < data_buffer->size && empty_line != 1);
+    } while (data_buffer->size == TCP_BUFFER_SIZE && empty_line == 0);
   } while (empty_line != 1);
+
+  return ERR_OK;
+}
+
+char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char *method, char *path) {
+  unsigned long bytes_fetched = 0;
+
+  run_or_die(http_send(conn, hostname, port, method, path));
+  run_or_die(http_get_headers(conn));
+
+  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
+    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
+      run_or_die(tcp_get(conn, data_buffer));
+      data_buffer->current_pos = 0;
+    }
+    putchar(data_buffer->data[data_buffer->current_pos]);
+    data_buffer->current_pos++;
+    bytes_fetched++;
+  }
 
   return ERR_OK;
 }
@@ -842,8 +860,7 @@ void init_unapi(void) {
   UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   debug("TCP/IP UNAPI initialized OK");
   get_unapi_version_string(unapiver);
-  run_or_die(http_send(&conn, "192.168.1.110", 8000, "GET", "/test"));
-  run_or_die(http_get_headers(&conn));
+  run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));
   /*do {*/
   /*  run_or_die(tcp_get(&conn, data_buffer));*/
   /*  data_received = (int)(data_buffer[0] | data_buffer[1] << 8);*/
