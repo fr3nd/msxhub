@@ -140,6 +140,8 @@ char *data_buffer;
 void die(const char *s, ...);
 void debug(const char *s, ...);
 void debug_nocrlf(const char *s, ...);
+void trim(char * s);
+void tolower_str(char *str);
 /*** prototypes }}} ***/
 
 /*** DOS functions {{{ ***/
@@ -624,6 +626,8 @@ char tcp_send(char *conn, char *data) {
 char http_send(char *conn, char *hostname, unsigned int port, char *method, char *path) {
   char buffer[128];
 
+  init_headers_info();
+
   run_or_die(tcp_connect(conn, hostname, port));
 
   sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
@@ -655,6 +659,28 @@ void parse_response(char *header) {
       headers_info.status_code = (unsigned int)atoi(token);
     }
     token = strtok(NULL, " ");
+    n++;
+  }
+}
+
+void parse_header(char *header, char *title, char *value) {
+  char buffer[MAX_HEADER_SIZE];
+  char *token;
+  int n;
+
+  strcpy(buffer, header);
+
+  n = 0;
+  token = strtok(buffer,":");
+  while( token != NULL ) {
+    if (n == 0) {
+      trim(token);
+      strcpy(title, token);
+    } else {
+      trim(token);
+      strcpy(value, token);
+    }
+    token = strtok(NULL, "\0");
     n++;
   }
 }
@@ -693,10 +719,12 @@ char tcp_get(char *conn, char *data) {
   }
 }
 
-char http_get_headers(char *conn, headers_info_t *headers_info) {
+char http_get_headers(char *conn) {
   int n, m, x;
   int data_received;
   char header[MAX_HEADER_SIZE];
+  char title[MAX_HEADER_SIZE];
+  char value[MAX_HEADER_SIZE];
   char empty_line;
 
   x = 0;
@@ -724,6 +752,12 @@ char http_get_headers(char *conn, headers_info_t *headers_info) {
           debug("< %s", header);
           if (x == 0) { // first header received
             parse_response(header);
+          } else {
+            parse_header(header, title, value);
+            tolower_str(title);
+            if (strcmp(title, "content-length") == 0) {
+              headers_info.content_length = (unsigned long)atol(value);
+            }
           }
         }
         x++;
@@ -769,6 +803,11 @@ void get_unapi_version_string(char *unapiver) {
   debug("%s", unapiver);
 }
 
+void init_headers_info(void) {
+  headers_info.content_length = 0;
+  headers_info.status_code = 0;
+}
+
 void init_unapi(void) {
   ip_addr ip;
   char err_code;
@@ -800,7 +839,7 @@ void init_unapi(void) {
   debug("TCP/IP UNAPI initialized OK");
   get_unapi_version_string(unapiver);
   run_or_die(http_send(&conn, "192.168.1.110", 8000, "GET", "/test"));
-  run_or_die(http_get_headers(&conn, &headers_info));
+  run_or_die(http_get_headers(&conn));
   /*do {*/
   /*  run_or_die(tcp_get(&conn, data_buffer));*/
   /*  data_received = (int)(data_buffer[0] | data_buffer[1] << 8);*/
@@ -835,6 +874,25 @@ void debug_nocrlf(const char *s, ...) {
   vprintf(s, ap);
   va_end(ap);
   #endif
+}
+
+// https://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
+void trim(char * s) {
+  char * p = s;
+  int l = strlen(p);
+
+  while(isspace(p[l - 1])) p[--l] = 0;
+  while(* p && isspace(* p)) ++p, --l;
+
+  memmove(s, p, l + 1);
+}
+
+void tolower_str(char *str) {
+  int i;
+
+  for(int i = 0; str[i]; i++){
+    str[i] = tolower(str[i]);
+  }
 }
 
 
