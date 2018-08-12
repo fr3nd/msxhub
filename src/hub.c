@@ -861,13 +861,38 @@ char http_get_headers(char *conn) {
   return ERR_OK;
 }
 
+
+char http_get_content_to_var(char *conn, char *hostname, unsigned int port, char *method, char *path, char *data, int maxdata) {
+  unsigned long bytes_fetched = 0;
+  int n;
+
+  run_or_die(http_send(conn, hostname, port, method, path));
+  run_or_die(http_get_headers(conn));
+
+  n = 0;
+  while (bytes_fetched < headers_info.content_length && n < maxdata) { // Repeat until all data is fetched
+    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
+      run_or_die(tcp_get(conn, data_buffer));
+      data_buffer->current_pos = 0;
+    }
+    data[n] = data_buffer->data[data_buffer->current_pos];
+    n++;
+    data_buffer->current_pos++;
+    bytes_fetched++;
+  }
+  data[n+1] = '\0';
+  run_or_die(tcp_close(conn));
+
+  return ERR_OK;
+}
+
 char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char *method, char *path) {
   unsigned long bytes_fetched = 0;
 
   run_or_die(http_send(conn, hostname, port, method, path));
   run_or_die(http_get_headers(conn));
 
-  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
+  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetched
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
       run_or_die(tcp_get(conn, data_buffer));
       data_buffer->current_pos = 0;
@@ -908,9 +933,9 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
 
   printf("\33x5"); // Disable cursor
   progress_bar_size = get_screen_size() - 17 - 12;
-  file_name = parse_pathname(0, pathfilename);
+  file_name = (unsigned char*)parse_pathname(0, pathfilename);
 
-  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
+  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetched
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
       run_or_die(tcp_get(conn, data_buffer));
       data_buffer->current_pos = 0;
@@ -1136,11 +1161,9 @@ void install(char const *package) {
   read_config();
   init_unapi();
 
-  /*debug("CON");*/
-  /*run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));*/
-  debug("FILE");
-  run_or_die(http_get_content_to_file(&conn, "192.168.1.110", 8000, "GET", "/test", "a:\\hub\\test.txt"));
-  debug("END");
+  //run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));
+  //run_or_die(http_get_content_to_file(&conn, "192.168.1.110", 8000, "GET", "/test", "a:\\hub\\test.txt"));
+  //run_or_die(http_get_content_to_var(&conn, "192.168.1.110", 8000, "GET", "/test3", data, 128));
 }
 
 void configure(void) {
