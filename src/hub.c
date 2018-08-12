@@ -19,6 +19,7 @@
 #define CLOSE   #0x45
 #define READ    #0x48
 #define WRITE   #0x49
+#define IOCTL   #0x4B
 #define PARSE   #0x5B
 #define TERM    #0x62
 #define EXPLAIN #0x66
@@ -151,6 +152,21 @@ void tolower_str(char *str);
 /*** prototypes }}} ***/
 
 /*** DOS functions {{{ ***/
+
+char get_screen_size(void) __naked {
+  __asm
+    push ix
+
+    ld a, #0x04
+
+    ld c,IOCTL
+    DOSCALL
+    ld l, e
+
+    pop ix
+    ret
+  __endasm;
+}
 
 int getchar(void) __naked {
   __asm
@@ -872,6 +888,7 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   int n;
   unsigned long bytes_written;
   char buffer[255] = { '\0' };
+  char progress_bar_size;
 
   run_or_die(http_send(conn, hostname, port, method, path));
   run_or_die(http_get_headers(conn));
@@ -888,6 +905,8 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
 
   bytes_written = 0;
 
+  printf("\33x5"); // Disable cursor
+  progress_bar_size = get_screen_size() - 20;
   while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
       run_or_die(tcp_get(conn, data_buffer));
@@ -898,12 +917,13 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
     bytes_written += data_buffer->size - data_buffer->current_pos;
 
     putchar('\r');
-    progress_bar(bytes_written, headers_info.content_length, 40, "K");
+    progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
 
     bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
     data_buffer->current_pos = data_buffer->size;
   }
   printf("\r\n");
+  printf("\33y5"); // Enable cursor
   close(fp);
   run_or_die(tcp_close(conn));
 
@@ -918,15 +938,15 @@ void progress_bar(unsigned long current, unsigned long total, char size, char *u
   int n, m;
 
   putchar('[');
-  m = (int)((float)current / total * size);
+  m = (int)((float)current / total * size - 2);
   for (n=0; n<m; n++) {
     putchar('=');
   }
   putchar('>');
-  for (n=m; n<size; n++) {
+  for (n=m; n < size - 2; n++) {
     putchar(' ');
   }
-  printf("] %lu%s/%lu%s", current, unit, total, unit);
+  printf("] %lu%s/%lu%s\33K", current, unit, total, unit);
 }
 
 void debug(const char *s, ...) {
