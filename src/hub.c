@@ -143,6 +143,7 @@ data_buffer_t *data_buffer;
 
 /*** prototypes {{{ ***/
 void die(const char *s, ...);
+void progress_bar(unsigned long current, unsigned long total, char size, char *unit);
 void debug(const char *s, ...);
 void debug_nocrlf(const char *s, ...);
 void trim(char * s);
@@ -869,7 +870,7 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   char *d;
   int fp;
   int n;
-  int bytes_written;
+  unsigned long bytes_written;
   char buffer[255] = { '\0' };
 
   run_or_die(http_send(conn, hostname, port, method, path));
@@ -895,7 +896,10 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
 
     write(data_buffer->data + (char)data_buffer->current_pos, data_buffer->size - data_buffer->current_pos, fp);
     bytes_written += data_buffer->size - data_buffer->current_pos;
-    printf("\rBytes written: %d\K", bytes_written);
+
+    putchar('\r');
+    progress_bar(bytes_written, headers_info.content_length, 40, "K");
+
     bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
     data_buffer->current_pos = data_buffer->size;
   }
@@ -909,6 +913,21 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
 /*** HTTP functions }}} ***/
 
 /*** functions {{{ ***/
+
+void progress_bar(unsigned long current, unsigned long total, char size, char *unit) {
+  int n, m;
+
+  putchar('[');
+  m = (int)((float)current / total * size);
+  for (n=0; n<m; n++) {
+    putchar('=');
+  }
+  putchar('>');
+  for (n=m; n<size; n++) {
+    putchar(' ');
+  }
+  printf("] %lu%s/%lu%s", current, unit, total, unit);
+}
 
 void debug(const char *s, ...) {
   if (DEBUG != 0) {
