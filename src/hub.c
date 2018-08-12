@@ -839,6 +839,8 @@ char http_get_headers(char *conn) {
     } while (data_buffer->size == TCP_BUFFER_SIZE && empty_line == 0);
   } while (empty_line != 1);
 
+  data_buffer->current_pos++; // Ignore \n
+
   return ERR_OK;
 }
 
@@ -863,7 +865,7 @@ char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char
 }
 
 char http_get_content_to_file(char *conn, char *hostname, unsigned int port, char *method, char *path, char *filename) {
-  unsigned long bytes_fetched = 0;
+  unsigned long bytes_fetched = 1;
   char *d;
   int fp;
   int n;
