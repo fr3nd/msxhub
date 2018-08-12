@@ -743,9 +743,6 @@ void init_headers_info(void) {
 void init_unapi(void) {
   ip_addr ip;
   char err_code;
-  char conn = 0;
-  int n;
-  int data_received;
 
   // FIXME Not sure why it doesn't work with malloc...
   //code_block = malloc(sizeof(unapi_code_block));
@@ -770,16 +767,6 @@ void init_unapi(void) {
   UnapiCall(code_block, TCPIP_TCP_ABORT, &regs, REGS_MAIN, REGS_MAIN);
   debug("TCP/IP UNAPI initialized OK");
   get_unapi_version_string(unapiver);
-  run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));
-  /*do {*/
-  /*  run_or_die(tcp_get(&conn, data_buffer));*/
-  /*  data_received = (int)(data_buffer[0] | data_buffer[1] << 8);*/
-  /*  for (n = 0; n < data_received; n++) {*/
-  /*    printf("%c", data_buffer[n+2]);*/
-  /*  }*/
-  /*} while (data_received == TCP_BUFFER_SIZE);*/
-
-  run_or_die(tcp_close(&conn));
 }
 
 /*** UNAPI functions }}} ***/
@@ -870,6 +857,50 @@ char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char
     data_buffer->current_pos++;
     bytes_fetched++;
   }
+  run_or_die(tcp_close(conn));
+
+  return ERR_OK;
+}
+
+char http_get_content_to_file(char *conn, char *hostname, unsigned int port, char *method, char *path, char *filename) {
+  unsigned long bytes_fetched = 0;
+  char *d;
+  int fp;
+  int n;
+  int bytes_written;
+  char buffer[255] = { '\0' };
+
+  run_or_die(http_send(conn, hostname, port, method, path));
+  run_or_die(http_get_headers(conn));
+
+  fp = create(filename, O_RDWR, 0x00);
+
+  // Error is in the least significative byte of p
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    printf("Error opening file %s: 0x%X\r\n", filename, n);
+    explain(buffer, n);
+    die("%s", buffer);
+  }
+
+  bytes_written = 0;
+
+  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
+    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
+      run_or_die(tcp_get(conn, data_buffer));
+      data_buffer->current_pos = 0;
+    }
+
+    // TODO do not write headers
+    write(data_buffer->data, data_buffer->size, fp);
+    bytes_written += data_buffer->size;
+    printf("\rBytes written: %d\K", bytes_written);
+    bytes_fetched = bytes_fetched + data_buffer->size;
+    data_buffer->current_pos = data_buffer->size;
+  }
+  printf("\r\n");
+  close(fp);
+  run_or_die(tcp_close(conn));
 
   return ERR_OK;
 }
@@ -1057,8 +1088,16 @@ void read_config(void) {
 /*** commands {{{ ***/
 
 void install(char const *package) {
+  char conn = 0;
+
   read_config();
   init_unapi();
+
+  /*debug("CON");*/
+  /*run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));*/
+  debug("FILE");
+  run_or_die(http_get_content_to_file(&conn, "192.168.1.110", 8000, "GET", "/test", "a:\\hub\\test.txt"));
+  debug("END");
 }
 
 void configure(void) {
@@ -1155,8 +1194,6 @@ int main(char **argv, int argc) {
   } else {
     help("");
   }
-
-  //printf("CONFIG: %s\r\n", get_config("PROGSDIR"));
 
   return 0;
 }
