@@ -881,7 +881,7 @@ char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char
   return ERR_OK;
 }
 
-char http_get_content_to_file(char *conn, char *hostname, unsigned int port, char *method, char *path, char *filename) {
+char http_get_content_to_file(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename) {
   unsigned long bytes_fetched = 1;
   char *d;
   int fp;
@@ -889,16 +889,17 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   unsigned long bytes_written;
   char buffer[255] = { '\0' };
   char progress_bar_size;
+  char *file_name;
 
   run_or_die(http_send(conn, hostname, port, method, path));
   run_or_die(http_get_headers(conn));
 
-  fp = create(filename, O_RDWR, 0x00);
+  fp = create(pathfilename, O_RDWR, 0x00);
 
   // Error is in the least significative byte of p
   if (fp < 0) {
     n = (fp >> 0) & 0xff;
-    printf("Error opening file %s: 0x%X\r\n", filename, n);
+    printf("Error opening file %s: 0x%X\r\n", pathfilename, n);
     explain(buffer, n);
     die("%s", buffer);
   }
@@ -906,7 +907,9 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   bytes_written = 0;
 
   printf("\33x5"); // Disable cursor
-  progress_bar_size = get_screen_size() - 20;
+  progress_bar_size = get_screen_size() - 17 - 12;
+  file_name = parse_pathname(0, pathfilename);
+
   while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
       run_or_die(tcp_get(conn, data_buffer));
@@ -916,7 +919,7 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
     write(data_buffer->data + (char)data_buffer->current_pos, data_buffer->size - data_buffer->current_pos, fp);
     bytes_written += data_buffer->size - data_buffer->current_pos;
 
-    putchar('\r');
+    printf("\r%-12s ", file_name);
     progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
 
     bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
