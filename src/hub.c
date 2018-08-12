@@ -628,28 +628,6 @@ char tcp_send(char *conn, char *data) {
 
 }
 
-char http_send(char *conn, char *hostname, unsigned int port, char *method, char *path) {
-  char buffer[128];
-
-  init_headers_info();
-
-  run_or_die(tcp_connect(conn, hostname, port));
-
-  sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
-  run_or_die(tcp_send(conn, buffer));
-
-  sprintf(buffer, "Host: %s\r\n", hostname);
-  run_or_die(tcp_send(conn, buffer));
-
-  sprintf(buffer, "User-Agent: MsxHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
-  run_or_die(tcp_send(conn, buffer));
-
-  run_or_die(tcp_send(conn, "Accept: */*\r\n"));
-
-  run_or_die(tcp_send(conn, "\r\n"));
-  return 0;
-}
-
 void parse_response(char *header) {
   char buffer[MAX_HEADER_SIZE];
   char *token;
@@ -720,72 +698,6 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
       }
     }
   }
-}
-
-char http_get_headers(char *conn) {
-  int m, x;
-  char header[MAX_HEADER_SIZE];
-  char title[MAX_HEADER_SIZE];
-  char value[MAX_HEADER_SIZE];
-  char empty_line;
-
-  x = 0;
-  do { // Repeat until an empty line is detected (end of headers)
-    do { // Repeat until there is no more data
-      run_or_die(tcp_get(conn, data_buffer));
-      data_buffer->current_pos = 0;
-      empty_line = 0;
-      do {
-        m = 0;
-        while (data_buffer->data[data_buffer->current_pos] != '\n') { // while not end of header
-          if (data_buffer->data[data_buffer->current_pos] != '\r') { // ignore \r
-            header[m] = data_buffer->data[data_buffer->current_pos];
-            m++;
-          }
-          data_buffer->current_pos++;
-        }
-
-        header[m] = '\0';
-        if (m == 0) {
-          empty_line = 1;
-        } else {
-          data_buffer->current_pos++;
-          debug("< %s", header);
-          if (x == 0) { // first header received
-            parse_response(header);
-          } else {
-            parse_header(header, title, value);
-            tolower_str(title);
-            if (strcmp(title, "content-length") == 0) {
-              headers_info.content_length = (unsigned long)atol(value);
-            }
-          }
-        }
-        x++;
-      } while (data_buffer->current_pos < data_buffer->size && empty_line != 1);
-    } while (data_buffer->size == TCP_BUFFER_SIZE && empty_line == 0);
-  } while (empty_line != 1);
-
-  return ERR_OK;
-}
-
-char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char *method, char *path) {
-  unsigned long bytes_fetched = 0;
-
-  run_or_die(http_send(conn, hostname, port, method, path));
-  run_or_die(http_get_headers(conn));
-
-  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
-    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
-      run_or_die(tcp_get(conn, data_buffer));
-      data_buffer->current_pos = 0;
-    }
-    putchar(data_buffer->data[data_buffer->current_pos]);
-    data_buffer->current_pos++;
-    bytes_fetched++;
-  }
-
-  return ERR_OK;
 }
 
 char tcp_close(char *conn) {
@@ -871,6 +783,98 @@ void init_unapi(void) {
 }
 
 /*** UNAPI functions }}} ***/
+
+/*** HTTP functions {{{ ***/
+
+char http_send(char *conn, char *hostname, unsigned int port, char *method, char *path) {
+  char buffer[128];
+
+  init_headers_info();
+
+  run_or_die(tcp_connect(conn, hostname, port));
+
+  sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
+  run_or_die(tcp_send(conn, buffer));
+
+  sprintf(buffer, "Host: %s\r\n", hostname);
+  run_or_die(tcp_send(conn, buffer));
+
+  sprintf(buffer, "User-Agent: MsxHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
+  run_or_die(tcp_send(conn, buffer));
+
+  run_or_die(tcp_send(conn, "Accept: */*\r\n"));
+
+  run_or_die(tcp_send(conn, "\r\n"));
+  return 0;
+}
+
+char http_get_headers(char *conn) {
+  int m, x;
+  char header[MAX_HEADER_SIZE];
+  char title[MAX_HEADER_SIZE];
+  char value[MAX_HEADER_SIZE];
+  char empty_line;
+
+  x = 0;
+  do { // Repeat until an empty line is detected (end of headers)
+    do { // Repeat until there is no more data
+      run_or_die(tcp_get(conn, data_buffer));
+      data_buffer->current_pos = 0;
+      empty_line = 0;
+      do {
+        m = 0;
+        while (data_buffer->data[data_buffer->current_pos] != '\n') { // while not end of header
+          if (data_buffer->data[data_buffer->current_pos] != '\r') { // ignore \r
+            header[m] = data_buffer->data[data_buffer->current_pos];
+            m++;
+          }
+          data_buffer->current_pos++;
+        }
+
+        header[m] = '\0';
+        if (m == 0) {
+          empty_line = 1;
+        } else {
+          data_buffer->current_pos++;
+          debug("< %s", header);
+          if (x == 0) { // first header received
+            parse_response(header);
+          } else {
+            parse_header(header, title, value);
+            tolower_str(title);
+            if (strcmp(title, "content-length") == 0) {
+              headers_info.content_length = (unsigned long)atol(value);
+            }
+          }
+        }
+        x++;
+      } while (data_buffer->current_pos < data_buffer->size && empty_line != 1);
+    } while (data_buffer->size == TCP_BUFFER_SIZE && empty_line == 0);
+  } while (empty_line != 1);
+
+  return ERR_OK;
+}
+
+char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char *method, char *path) {
+  unsigned long bytes_fetched = 0;
+
+  run_or_die(http_send(conn, hostname, port, method, path));
+  run_or_die(http_get_headers(conn));
+
+  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetch
+    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
+      run_or_die(tcp_get(conn, data_buffer));
+      data_buffer->current_pos = 0;
+    }
+    putchar(data_buffer->data[data_buffer->current_pos]);
+    data_buffer->current_pos++;
+    bytes_fetched++;
+  }
+
+  return ERR_OK;
+}
+
+/*** HTTP functions }}} ***/
 
 /*** functions {{{ ***/
 
