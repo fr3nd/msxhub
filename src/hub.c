@@ -891,11 +891,10 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
       data_buffer->current_pos = 0;
     }
 
-    // TODO do not write headers
-    write(data_buffer->data, data_buffer->size, fp);
-    bytes_written += data_buffer->size;
+    write(data_buffer->data + (char)data_buffer->current_pos, data_buffer->size - data_buffer->current_pos, fp);
+    bytes_written += data_buffer->size - data_buffer->current_pos;
     printf("\rBytes written: %d\K", bytes_written);
-    bytes_fetched = bytes_fetched + data_buffer->size;
+    bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
     data_buffer->current_pos = data_buffer->size;
   }
   printf("\r\n");
