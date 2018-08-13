@@ -886,26 +886,6 @@ char http_get_content_to_var(char *conn, char *hostname, unsigned int port, char
   return ERR_OK;
 }
 
-char http_get_content_to_con(char *conn, char *hostname, unsigned int port, char *method, char *path) {
-  unsigned long bytes_fetched = 0;
-
-  run_or_die(http_send(conn, hostname, port, method, path));
-  run_or_die(http_get_headers(conn));
-
-  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetched
-    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
-      run_or_die(tcp_get(conn, data_buffer));
-      data_buffer->current_pos = 0;
-    }
-    putchar(data_buffer->data[data_buffer->current_pos]);
-    data_buffer->current_pos++;
-    bytes_fetched++;
-  }
-  run_or_die(tcp_close(conn));
-
-  return ERR_OK;
-}
-
 char http_get_content_to_file(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename) {
   unsigned long bytes_fetched = 1;
   char *d;
