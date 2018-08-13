@@ -875,31 +875,12 @@ char http_get_headers(char *conn) {
 }
 
 
-char http_get_content_to_var(char *conn, char *hostname, unsigned int port, char *method, char *path, char *data, int maxdata) {
-  unsigned long bytes_fetched = 0;
-  int n;
-
-  run_or_die(http_send(conn, hostname, port, method, path));
-  run_or_die(http_get_headers(conn));
-
-  n = 0;
-  while (bytes_fetched < headers_info.content_length && n < maxdata) { // Repeat until all data is fetched
-    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
-      run_or_die(tcp_get(conn, data_buffer));
-      data_buffer->current_pos = 0;
-    }
-    data[n] = data_buffer->data[data_buffer->current_pos];
-    n++;
-    data_buffer->current_pos++;
-    bytes_fetched++;
-  }
-  data[n-1] = '\0';
-  run_or_die(tcp_close(conn));
-
-  return ERR_OK;
-}
-
-char http_get_content_to_file(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename) {
+// accepts the following special names in pathfilename:
+// - CON sends output to stdout
+// - VAR sends output to var in data with maxdata
+//
+// note, maxdata always has to be >0
+char http_get_content(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename, char *data, int maxdata) {
   unsigned long bytes_fetched = 1;
   char *d;
   int fp;
@@ -914,6 +895,8 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
 
   if (strcmp(pathfilename, "CON") == 0) {
     fp = 1;
+  } else if (strcmp(pathfilename, "VAR") == 0) {
+    fp = 128; // bigger number than possible
   } else {
     fp = create(pathfilename, O_RDWR, 0x00);
   }
@@ -926,7 +909,7 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
     die("%s", buffer);
   }
 
-  if (fp != 1) { // not CON
+  if (fp > 4 && fp < 128) { // not special device
     bytes_written = 0;
 
     printf("\33x5"); // Disable cursor
@@ -934,25 +917,39 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
     file_name = (unsigned char*)parse_pathname(0, pathfilename);
   }
 
-  while (bytes_fetched < headers_info.content_length) { // Repeat until all data is fetched
+  n = 0;
+  while (bytes_fetched < headers_info.content_length && n < maxdata) { // Repeat until all data is fetched
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
       run_or_die(tcp_get(conn, data_buffer));
       data_buffer->current_pos = 0;
     }
-    write(&data_buffer->data[data_buffer->current_pos], data_buffer->size - data_buffer->current_pos, fp);
+    if (fp < 128) {
+      write(&data_buffer->data[data_buffer->current_pos], data_buffer->size - data_buffer->current_pos, fp);
+    } else { // store to variable
+      while (data_buffer->current_pos < data_buffer->size && n < maxdata) {
+        data[n] = data_buffer->data[data_buffer->current_pos];
+        n++;
+        data_buffer->current_pos++;
+      }
+    }
 
-    if (fp != 1) { // not CON
+    if (fp > 4 && fp < 128) { // not special device
       bytes_written += data_buffer->size - data_buffer->current_pos;
 
       printf("\r%-12s ", file_name);
       progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
     }
 
-    bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
+    if (fp == 128) {
+      bytes_fetched = n;
+      data[n-1] = '\0';
+    } else {
+      bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
+    }
     data_buffer->current_pos = data_buffer->size;
   }
 
-  if (fp != 1) { // not CON
+  if (fp > 4 && fp < 128) { // not special device
     printf("\r\n");
     printf("\33y5"); // Enable cursor
     close(fp);
@@ -1202,7 +1199,7 @@ void install(char const *package) {
 
   printf("- Getting list of files for package %s...\r\n", package);
   get_hostname_from_url(baseurl, hostname);
-  run_or_die(http_get_content_to_var(&conn, hostname, 80, "GET", "/files/vi/files", files, MAX_FILES_SIZE));
+  run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/vi/files", "VAR", files, MAX_FILES_SIZE));
 
   strcpy(local_path, progsdir);
   strcat(local_path, "\\");
@@ -1241,19 +1238,12 @@ void install(char const *package) {
     strcat(local_path, line);
 
     debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
-    run_or_die(http_get_content_to_file(&conn, hostname, 80, "GET", path, local_path));
+    run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, NULL, 1));
 
     if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
     line = next_line ? (next_line+1) : NULL;
   }
 
-  //run_or_die(http_get_content_to_var(&conn, "", 8000, "GET", "/test3", files, MAX_FILES_SIZE));
-
-  //run_or_die(http_get_content_to_var(&conn, "192.168.1.110", 8000, "GET", "/test3", data, 128));
-
-  //run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));
-  //run_or_die(http_get_content_to_file(&conn, "192.168.1.110", 8000, "GET", "/test", "a:\\hub\\test.txt"));
-  //run_or_die(http_get_content_to_var(&conn, "192.168.1.110", 8000, "GET", "/test3", data, 128));
 }
 
 void configure(void) {
