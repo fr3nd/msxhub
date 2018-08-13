@@ -1208,14 +1208,14 @@ void install(char const *package) {
   if (fp < 0) {
     n = (fp >> 0) & 0xff;
     if (n == DIRX) {
-      printf("Destination directory already exists: %s Continue? (y/N)\r\n", local_path);
+      printf("Destination directory already exists. Continue? (y/N)\r\n");
       c = tolower(getchar());
       printf("\r\n");
       if (c != 'y') {
         die("Aborted");
       }
     } else {
-      printf("Error creating destination directory: %s 0x%X\r\n", local_path, n);
+      printf("Error creating destination directory. 0x%X\r\n", n);
       explain(path, n); // Variable path is no longer going to be used. Reusing it as buffer
       die("%s", path);
     }
