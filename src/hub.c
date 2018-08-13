@@ -912,7 +912,11 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   run_or_die(http_send(conn, hostname, port, method, path));
   run_or_die(http_get_headers(conn));
 
-  fp = create(pathfilename, O_RDWR, 0x00);
+  if (strcmp(pathfilename, "CON") == 0) {
+    fp = 1;
+  } else {
+    fp = create(pathfilename, O_RDWR, 0x00);
+  }
 
   // Error is in the least significative byte of p
   if (fp < 0) {
@@ -922,11 +926,13 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
     die("%s", buffer);
   }
 
-  bytes_written = 0;
+  if (fp != 1) { // not CON
+    bytes_written = 0;
 
-  printf("\33x5"); // Disable cursor
-  progress_bar_size = get_screen_size() - 17 - 12;
-  file_name = (unsigned char*)parse_pathname(0, pathfilename);
+    printf("\33x5"); // Disable cursor
+    progress_bar_size = get_screen_size() - 17 - 12;
+    file_name = (unsigned char*)parse_pathname(0, pathfilename);
+  }
 
   while (bytes_fetched < headers_info.content_length) { // Repeat until all data is fetched
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
@@ -934,17 +940,23 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
       data_buffer->current_pos = 0;
     }
     write(&data_buffer->data[data_buffer->current_pos], data_buffer->size - data_buffer->current_pos, fp);
-    bytes_written += data_buffer->size - data_buffer->current_pos;
 
-    printf("\r%-12s ", file_name);
-    progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
+    if (fp != 1) { // not CON
+      bytes_written += data_buffer->size - data_buffer->current_pos;
+
+      printf("\r%-12s ", file_name);
+      progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
+    }
 
     bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
     data_buffer->current_pos = data_buffer->size;
   }
-  printf("\r\n");
-  printf("\33y5"); // Enable cursor
-  close(fp);
+
+  if (fp != 1) { // not CON
+    printf("\r\n");
+    printf("\33y5"); // Enable cursor
+    close(fp);
+  }
   run_or_die(tcp_close(conn));
 
   return ERR_OK;
