@@ -807,6 +807,7 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
   run_or_die(tcp_send(conn, buffer));
 
   run_or_die(tcp_send(conn, "Accept: */*\r\n"));
+  run_or_die(tcp_send(conn, "Accept-Encoding: identity\r\n"));
 
   run_or_die(tcp_send(conn, "\r\n"));
   return 0;
