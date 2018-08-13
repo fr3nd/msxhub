@@ -1212,7 +1212,7 @@ void install(char const *package) {
   if (fp < 0) {
     n = (fp >> 0) & 0xff;
     if (n == DIRX) {
-      printf("Destination directory already exists. Continue? (y/N)\r\n");
+      printf("Destination directory already exists.\r\nContinue? (y/N) ");
       c = tolower(getchar());
       printf("\r\n");
       if (c != 'y') {
@@ -1273,7 +1273,7 @@ void configure(void) {
   if (fp < 0) {
     n = (fp >> 0) & 0xff;
     if (n == DIRX) {
-      printf("Configuration directory already exists. Continue? (y/N)\r\n");
+      printf("Configuration directory already exists.\r\nContinue? (y/N) ");
       c = tolower(getchar());
       printf("\r\n");
       if (c != 'y') {
