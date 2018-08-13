@@ -928,13 +928,12 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   progress_bar_size = get_screen_size() - 17 - 12;
   file_name = (unsigned char*)parse_pathname(0, pathfilename);
 
-  while (bytes_fetched <= headers_info.content_length) { // Repeat until all data is fetched
+  while (bytes_fetched < headers_info.content_length) { // Repeat until all data is fetched
     if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
       run_or_die(tcp_get(conn, data_buffer));
       data_buffer->current_pos = 0;
     }
-
-    write(data_buffer->data + (char)data_buffer->current_pos, data_buffer->size - data_buffer->current_pos, fp);
+    write(&data_buffer->data[data_buffer->current_pos], data_buffer->size - data_buffer->current_pos, fp);
     bytes_written += data_buffer->size - data_buffer->current_pos;
 
     printf("\r%-12s ", file_name);
