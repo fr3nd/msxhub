@@ -137,9 +137,9 @@ typedef struct {
 char DEBUG;
 char msxdosver;
 char unapiver[90];
-char configpath[MAX_PATH_SIZE] = { '\0' };
-char progsdir[MAX_PATH_SIZE] = { '\0' };
-char baseurl[MAX_URL_SIZE] = { '\0' };
+char configpath[MAX_PATH_SIZE];
+char progsdir[MAX_PATH_SIZE];
+char baseurl[MAX_URL_SIZE];
 Z80_registers regs;
 unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
@@ -905,7 +905,7 @@ char http_get_content_to_file(char *conn, char *hostname, unsigned int port, cha
   int fp;
   int n;
   unsigned long bytes_written;
-  char buffer[255] = { '\0' };
+  char buffer[255];
   char progress_bar_size;
   char *file_name;
 
@@ -1190,8 +1190,8 @@ void install(char const *package) {
   char conn = 0;
   char files[MAX_FILES_SIZE];
   char hostname[64];
-  char path[MAX_URLPATH_SIZE] = { '\0' };
-  char local_path[MAX_PATH_SIZE] = { '\0' };
+  char path[MAX_URLPATH_SIZE];
+  char local_path[MAX_PATH_SIZE];
   char *line;
   char *next_line;
   int fp, n;
@@ -1257,8 +1257,8 @@ void install(char const *package) {
 }
 
 void configure(void) {
-  char buffer[255] = { '\0' };
-  char progsdir[255] = { '\0' };
+  char buffer[255];
+  char progsdir[255];
   char c;
   int fp, n;
 
