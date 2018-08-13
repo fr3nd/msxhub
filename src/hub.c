@@ -101,7 +101,12 @@ call CALSLT
 
 #define TCP_TIMEOUT 10
 #define TCP_BUFFER_SIZE (1024)
-#define MAX_HEADER_SIZE (256)
+#define MAX_HEADER_SIZE (512)
+#define MAX_URLPATH_SIZE (128)
+#define MAX_PATH_SIZE (64)
+#define MAX_URL_SIZE (256)
+
+#define MAX_FILES_SIZE (1024)
 #define TCPOUT_STEP_SIZE (512)
 #define TICKS_TO_WAIT (20*60)
 #define SYSTIMER ((uint*)0xFC9E)
@@ -132,14 +137,19 @@ typedef struct {
 char DEBUG;
 char msxdosver;
 char unapiver[90];
-char configpath[255] = { '\0' };
-char progsdir[255] = { '\0' };
-char baseurl[255] = { '\0' };
+char configpath[MAX_PATH_SIZE] = { '\0' };
+char progsdir[MAX_PATH_SIZE] = { '\0' };
+char baseurl[MAX_URL_SIZE] = { '\0' };
 Z80_registers regs;
 unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
 headers_info_t headers_info;
 data_buffer_t *data_buffer;
+
+
+char header[MAX_HEADER_SIZE];
+char title[32];
+char value[MAX_HEADER_SIZE];
 /*** global variables }}} ***/
 
 /*** prototypes {{{ ***/
@@ -807,6 +817,7 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
   run_or_die(tcp_send(conn, buffer));
 
   run_or_die(tcp_send(conn, "Accept: */*\r\n"));
+  run_or_die(tcp_send(conn, "Connection: close\r\n"));
   run_or_die(tcp_send(conn, "Accept-Encoding: identity\r\n"));
 
   run_or_die(tcp_send(conn, "\r\n"));
@@ -815,9 +826,9 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
 
 char http_get_headers(char *conn) {
   int m, x;
-  char header[MAX_HEADER_SIZE];
-  char title[MAX_HEADER_SIZE];
-  char value[MAX_HEADER_SIZE];
+  /*char header[MAX_HEADER_SIZE];*/
+  /*char title[32];*/
+  /*char value[MAX_HEADER_SIZE];*/
   char empty_line;
 
   x = 0;
@@ -843,6 +854,7 @@ char http_get_headers(char *conn) {
           data_buffer->current_pos++;
           debug("< %s", header);
           if (x == 0) { // first header received
+            // TODO Implement redirects and other error codes
             parse_response(header);
           } else {
             parse_header(header, title, value);
@@ -881,7 +893,7 @@ char http_get_content_to_var(char *conn, char *hostname, unsigned int port, char
     data_buffer->current_pos++;
     bytes_fetched++;
   }
-  data[n+1] = '\0';
+  data[n-1] = '\0';
   run_or_die(tcp_close(conn));
 
   return ERR_OK;
@@ -1129,13 +1141,13 @@ const char* get_config(char* filename) {
 
   n = read(buffer, sizeof(buffer), fp);
   close(fp);
-  buffer[n] = '\0';
+  buffer[n-1] = '\0';
   debug("Read config: %s = %s", filename, buffer);
   return buffer;
 }
 
 void read_config(void) {
-  strcpy(progsdir, get_config("progsdir"));
+  strcpy(progsdir, get_config("PROGSDIR"));
   strcpy(baseurl, get_config("BASEURL"));
 }
 
@@ -1143,11 +1155,97 @@ void read_config(void) {
 
 /*** commands {{{ ***/
 
+void get_hostname_from_url(char *url, char *hostname) {
+  char buffer[MAX_URL_SIZE];
+  char *token;
+  int n;
+
+  strcpy(buffer, url);
+
+  n = 0;
+  token = strtok(buffer,"/:");
+  while( token != NULL ) {
+    if (n == 1) {
+      strcpy(hostname, token);
+      break;
+    }
+    debug("n: %d token: %s", n, token);
+    token = strtok(NULL, "/:");
+    n++;
+  }
+
+}
+
+void print_hex(const char *s) {
+  while(*s)
+    printf("%02x ", (unsigned int) *s++);
+  printf("\r\n");
+}
+
 void install(char const *package) {
   char conn = 0;
+  char files[MAX_FILES_SIZE];
+  char hostname[64];
+  char path[MAX_URLPATH_SIZE] = { '\0' };
+  char local_path[MAX_PATH_SIZE] = { '\0' };
+  char *line;
+  char *next_line;
+  int fp, n;
+  char c;
 
   read_config();
   init_unapi();
+
+  printf("- Getting list of files for package %s...\r\n", package);
+  get_hostname_from_url(baseurl, hostname);
+  run_or_die(http_get_content_to_var(&conn, hostname, 80, "GET", "/files/vi/files", files, MAX_FILES_SIZE));
+
+  strcpy(local_path, progsdir);
+  strcat(local_path, "\\");
+  strcat(local_path, package);
+  printf("- Creating destination directory: %s\r\n", local_path);
+  fp = create(local_path, O_RDWR, ATTR_DIRECTORY);
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n == DIRX) {
+      printf("Destination directory already exists: %s Continue? (y/N)\r\n", local_path);
+      c = tolower(getchar());
+      printf("\r\n");
+      if (c != 'y') {
+        die("Aborted");
+      }
+    } else {
+      printf("Error creating destination directory: %s 0x%X\r\n", local_path, n);
+      explain(path, n); // Variable path is no longer going to be used. Reusing it as buffer
+      die("%s", path);
+    }
+  }
+
+  printf("- Downloading files...\r\n");
+  line = files;
+  // Iterate trough all files
+  // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
+  while (line) {
+    next_line = strchr(line, '\n');
+    if (next_line) *next_line = '\0'; // temporarily terminate the current line
+
+    strcpy(path, "/files/vi/latest/");
+    strcat(path, line);
+
+    strcpy(local_path, progsdir);
+    strcat(local_path, "\\vi\\");
+    strcat(local_path, line);
+
+    debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
+    run_or_die(http_get_content_to_file(&conn, hostname, 80, "GET", path, local_path));
+
+    if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
+    line = next_line ? (next_line+1) : NULL;
+  }
+
+  //run_or_die(http_get_content_to_var(&conn, "", 8000, "GET", "/test3", files, MAX_FILES_SIZE));
+
+  //run_or_die(http_get_content_to_var(&conn, "192.168.1.110", 8000, "GET", "/test3", data, 128));
 
   //run_or_die(http_get_content_to_con(&conn, "192.168.1.110", 8000, "GET", "/test"));
   //run_or_die(http_get_content_to_file(&conn, "192.168.1.110", 8000, "GET", "/test", "a:\\hub\\test.txt"));
@@ -1187,7 +1285,7 @@ void configure(void) {
   // Guess the default install directory
   progsdir[0] = configpath[0];
   progsdir[1] = '\0';
-  strcat(progsdir, ":\\PROGRAMS");
+  strcat(progsdir, ":\\HUB\\PROGRAMS");
 
   // Configure where to install programs
   printf("Where are programs going to be installed? (Default: %s)\r\n", progsdir);
@@ -1196,6 +1294,15 @@ void configure(void) {
     strcpy(progsdir, buffer);
   }
   save_config("PROGSDIR", progsdir);
+  fp = create(progsdir, O_RDWR, ATTR_DIRECTORY);
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n != DIRX) { // Ignore error if directory already  exists
+      printf("Error creating configuration directory %s: 0x%X\r\n", progsdir, n);
+      explain(buffer, n);
+      die("%s", buffer);
+    }
+  }
 
   save_config("BASEURL", "http://msxhub.com/files/");
 
