@@ -1,32 +1,40 @@
-.PHONY: clean libs libsclean
-C_FILES := $(wildcard *.c)
-IHX_FILES := $(subst .c,.ihx,$(C_FILES))
-COM_FILES := $(subst .ihx,.com,$(IHX_FILES))
+.PHONY: clean test release
+
+PROGRAM = hub.com
+
 DOCKER_IMAGE = fr3nd/sdcc:3.7.0-2
 AS = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} sdasz80
 CC = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} sdcc
 HEX2BIN = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} hex2bin
 INCLUDEDIR = include
 
-CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 -I$(INCLUDEDIR) $(INCLUDEDIR)/crt0msx_msxdos_advanced.rel $(INCLUDEDIR)/asm.lib
+S_FILES := $(wildcard *.s) $(wildcard $(INCLUDEDIR)/*.s)
+REL_FILES := $(subst .s,.rel,$(S_FILES))
+C_FILES := $(wildcard $(INCLUDEDIR)/*.c)
+IHX_FILES := $(subst .c,.ihx,$(C_FILES))
+REL_IHX_FILES := $(subst .c,.rel,$(C_FILES))
+LIB_FILES := $(wildcard $(INCLUDEDIR)/*.lib)
 
-all: libs $(COM_FILES)
+CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size
+#CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0
 
-libs:
-	$(MAKE) -C $(INCLUDEDIR)
+all: $(PROGRAM)
 
-libsclean:
-	$(MAKE) -C $(INCLUDEDIR) clean
+%.rel: %.s
+	$(AS) -o $(@:.s=.rel) $^
 
 %.ihx: %.c
-	$(CC) $(CCFLAGS) $^
+	$(CC) $(CCFLAGS) -o $(@:.c=.ihx) $^
 
-%.com: %.ihx
-	mkdir -p bin
+$(subst .com,.ihx,$(PROGRAM)): $(REL_FILES) $(IHX_FILES) $(C_FILES) $(subst .com,.c,$(PROGRAM))
+	$(CC) $(CCFLAGS) -I$(INCLUDEDIR) $(REL_FILES) $(REL_IHX_FILES) $(LIB_FILES) $(subst .com,.c,$(PROGRAM))
+
+$(PROGRAM): $(REL_FILES) $(IHX_FILES) $(subst .com,.ihx,$(PROGRAM))
+	@mkdir -p bin
 	$(HEX2BIN) -e com $^
-	cp $@ bin/
+	@cp $@ bin/
 
-clean: libsclean
+clean:
 	find dsk \
 		-not -name 'COMMAND2.COM' \
 		-not -name 'COMMAND.COM' \
@@ -38,6 +46,7 @@ clean: libsclean
 		-delete || true
 	rm -rf dsk/hub dsk/config
 	rm -f *.com *.asm *.lst *.sym *.bin *.ihx *.lk *.map *.noi *.rel
+	rm -f $(INCLUDEDIR)/*.com $(INCLUDEDIR)/*.asm $(INCLUDEDIR)/*.lst $(INCLUDEDIR)/*.sym $(INCLUDEDIR)/*.bin $(INCLUDEDIR)/*.ihx $(INCLUDEDIR)/*.lk $(INCLUDEDIR)/*.map $(INCLUDEDIR)/*.noi $(INCLUDEDIR)/*.rel
 	rm -rf bin/
 	rm -f hub.zip
 
