@@ -103,6 +103,8 @@ typedef struct {
   int size;
   int current_pos;
   unsigned long data_fetched;
+  int chunked_data_available;
+  unsigned long chunk_size;
   char no_more_data;
   char data[TCP_BUFFER_SIZE];
 } data_buffer_t;
@@ -139,6 +141,7 @@ void debug(const char *s, ...);
 void debug_nocrlf(const char *s, ...);
 void trim(char * s);
 void tolower_str(char *str);
+unsigned long hexstr2ul(char *str);
 /*** prototypes }}} ***/
 
 /*** UNAPI functions {{{ ***/
@@ -524,6 +527,7 @@ char http_get_headers(char *conn) {
     do { // Repeat until there is no more data
       run_or_die(tcp_get(conn, data_buffer));
       data_buffer->current_pos = 0;
+      data_buffer->chunk_size = 0;
       empty_line = 0;
       do {
         m = 0;
@@ -553,6 +557,7 @@ char http_get_headers(char *conn) {
               if (strcmp(value, "chunked") == 0) {
                 debug("Transfer encoding is chunked.");
                 headers_info.is_chunked = 1;
+                data_buffer->chunked_data_available = 1;
               }
             }
           }
@@ -572,7 +577,7 @@ char http_get_headers(char *conn) {
 
 char tcp_get_databyte(char *conn, data_buffer_t *data_buffer) {
 
-  while (data_buffer->data_fetched < headers_info.content_length) {
+  while (data_buffer->data_fetched < headers_info.content_length || data_buffer->chunked_data_available == 1) {
     if (data_buffer->current_pos < data_buffer->size) { // still have data in the buffer
       data_buffer->data_fetched++;
       data_buffer->current_pos++;
@@ -589,11 +594,28 @@ char tcp_get_databyte(char *conn, data_buffer_t *data_buffer) {
 }
 
 char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
+  char buffer[160];
+  int n;
 
-  if (headers_info.is_chunked == 1) {
-    data_buffer->no_more_data = 1;
-    printf("TODO: chunked transfer\r\n");
-    // TODO
+  if (headers_info.is_chunked == 1) { // Content transfer is chunked
+    if (data_buffer->chunk_size == 0) { // Get new chunk size
+      n = 0;
+
+      do {
+        buffer[n] = tcp_get_databyte(conn, data_buffer);
+        n ++;
+      } while (buffer[n-1] != ';' && buffer[n-1] != '\r');
+
+      buffer[n-1] = '\0';
+      data_buffer->chunk_size = hexstr2ul(buffer);
+    }
+    if (data_buffer->chunk_size == 0) {
+      data_buffer->chunked_data_available = 0;
+      data_buffer->no_more_data = 1;
+    }
+    // Get actual data
+    data_buffer->chunk_size--;
+    return tcp_get_databyte(conn, data_buffer);
   } else {
     return tcp_get_databyte(conn, data_buffer);
   }
@@ -737,6 +759,27 @@ void tolower_str(char *str) {
   }
 }
 
+unsigned long hexstr2ul(char *str) {
+  int n;
+  char c;
+  unsigned long result;
+
+  result = 0;
+  n = 0;
+  c = ' ';
+  while (c != '\0') {
+    c = tolower(str[n]);
+    if(c >= '0' && c <= '9') {
+      result = result*16 + c - '0';
+    } else if(c >= 'a' && c <= 'f') {
+      result = result*16 + c - 'a' + 10;
+    }
+    n++;
+  }
+  printf("\r\n");
+
+  return result;
+}
 
 // Based on https://github.com/svn2github/sdcc/blob/master/sdcc/device/lib/gets.c
 char* gets (char *s) {
