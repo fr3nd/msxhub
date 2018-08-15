@@ -119,6 +119,7 @@ typedef struct {
 char DEBUG;
 char msxdosver;
 char unapiver[90];
+char hubpath[MAX_PATH_SIZE];
 char configpath[MAX_PATH_SIZE];
 char progsdir[MAX_PATH_SIZE];
 char baseurl[MAX_URL_SIZE];
@@ -879,9 +880,10 @@ void init(void) {
   }
 
   // Get the full path of the program and extract only the directory
-  get_env("PROGRAM", configpath, sizeof(configpath));
-  p = parse_pathname(0, configpath);
+  get_env("PROGRAM", hubpath, sizeof(hubpath));
+  p = parse_pathname(0, hubpath);
   *((char*)p) = '\0';
+  strcpy(configpath, hubpath);
   strcat(configpath, "CONFIG");
   debug("Configpath: %s", configpath);
 }
@@ -1044,6 +1046,41 @@ void install(char const *package) {
     if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
     line = next_line ? (next_line+1) : NULL;
   }
+
+  // Download bat files
+  printf("- Getting list of bat files for package %s...\r\n", package);
+
+  strcpy(path, "/files/");
+  strcat(path, package);
+  strcat(path, "/latest/batfiles");
+  run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
+
+  printf("- Downloading bat files...\r\n");
+  line = files;
+  // Iterate trough all files
+  // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
+  while (line) {
+    next_line = strchr(line, '\n');
+    if (next_line) *next_line = '\0'; // temporarily terminate the current line
+
+    if (strlen(line) > 0 ) {
+      strcpy(path, "/files/");
+      strcat(path, package);
+      strcat(path, "/latest/bat/");
+      strcat(path, line);
+
+      strcpy(local_path, hubpath);
+      strcat(local_path, "BAT\\");
+      strcat(local_path, line);
+
+      debug("Downloading %s %s\r\n", hostname, path);
+      run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, -1, NULL));
+    }
+
+    if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
+    line = next_line ? (next_line+1) : NULL;
+  }
+  printf("- Done!\r\n");
 }
 
 void configure(void) {
@@ -1051,6 +1088,8 @@ void configure(void) {
   char progsdir[255];
   char c;
   int fp, n;
+
+  // TODO configure autoexec.bat
 
   printf("Welcome to MSX Hub!\r\n\n");
   printf("This wizard will guide you through the configuration process.\r\n\n");
@@ -1099,6 +1138,19 @@ void configure(void) {
   }
 
   save_config("BASEURL", "http://msxhub.com/files/");
+
+  // Create bat dir
+  strcpy(buffer, hubpath);
+  strcat(buffer, "BAT");
+  fp = create(buffer, O_RDWR, ATTR_DIRECTORY);
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n != DIRX) { // Ignore error if directory already  exists
+      printf("Error creating bat directory %s: 0x%X\r\n", buffer, n);
+      explain(buffer, n);
+      die("%s", buffer);
+    }
+  }
 
   printf("Done! MSX Hub configured properly.\r\n");
 }
