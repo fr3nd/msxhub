@@ -720,7 +720,7 @@ void progress_bar(unsigned long current, unsigned long total, char size, char *u
     }
   } else {
     m = (int)((float)current / total * size);
-    for (n=0; n < m; n++) {
+    for (n=0; n <= m; n++) {
       putchar('=');
     }
     putchar('>');
