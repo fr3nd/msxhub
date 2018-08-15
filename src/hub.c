@@ -142,6 +142,7 @@ void debug_nocrlf(const char *s, ...);
 void trim(char * s);
 void tolower_str(char *str);
 unsigned long hexstr2ul(char *str);
+void abort_if_esc_is_pressed(void);
 /*** prototypes }}} ***/
 
 /*** UNAPI functions {{{ ***/
@@ -229,7 +230,7 @@ char getaddrinfo(char *hostname, ip_addr ip) {
   }
 
   do {
-    // AbortIfEscIsPressed();
+    abort_if_esc_is_pressed();
     TCP_WAIT();
     regs.Bytes.B = 0;
     UnapiCall(code_block, TCPIP_DNS_S, &regs, REGS_MAIN, REGS_MAIN);
@@ -290,7 +291,7 @@ char tcp_connect(char *conn, char *hostname, unsigned int port) {
 
   n = 0;
   do {
-    // AbortIfEscIsPressed();
+    abort_if_esc_is_pressed();
     sys_timer_hold = *SYSTIMER;
     TCP_WAIT();
     while(*SYSTIMER == sys_timer_hold);
@@ -320,7 +321,7 @@ char tcp_send(char *conn, char *data) {
 
   do {
     do {
-      // AbortIfEscIsPressed();
+      abort_if_esc_is_pressed();
       regs.Bytes.B = *conn;
       regs.Words.DE = (int)data;
       regs.Words.HL = data_size > TCPOUT_STEP_SIZE ? TCPOUT_STEP_SIZE : data_size;
@@ -392,7 +393,7 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
   data_buffer->data[0] = '\n';
 
   while(1) {
-    // AbortIfEscIsPressed();
+    abort_if_esc_is_pressed();
     sys_timer_hold = *SYSTIMER;
     TCP_WAIT();
     while(*SYSTIMER == sys_timer_hold);
@@ -779,6 +780,12 @@ unsigned long hexstr2ul(char *str) {
   printf("\r\n");
 
   return result;
+}
+
+void abort_if_esc_is_pressed (void) {
+  if ((*((byte*)0xFBEC) & 4) == 0) {
+    die("Operation cancelled by user.");
+  }
 }
 
 // Based on https://github.com/svn2github/sdcc/blob/master/sdcc/device/lib/gets.c
