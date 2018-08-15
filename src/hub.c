@@ -709,15 +709,25 @@ void progress_bar(unsigned long current, unsigned long total, char size, char *u
   int n, m;
 
   putchar('[');
-  m = (int)((float)current / total * size - 2);
-  for (n=0; n<m; n++) {
-    putchar('=');
+  if (headers_info.is_chunked == 1) {
+    for (n=0; n < size-1; n++) {
+      putchar('-');
+    }
+  } else {
+    m = (int)((float)current / total * size - 2);
+    for (n=0; n < m; n++) {
+      putchar('=');
+    }
+    putchar('>');
+    for (n=m; n < size - 2; n++) {
+      putchar(' ');
+    }
   }
-  putchar('>');
-  for (n=m; n < size - 2; n++) {
-    putchar(' ');
+  printf("] %lu%s", current, unit);
+  if (headers_info.is_chunked != 1) {
+    printf("/%lu%s", total, unit);
   }
-  printf("] %lu%s/%lu%s\33K", current, unit, total, unit);
+  printf("\33K");
 }
 
 void debug(const char *s, ...) {
@@ -777,12 +787,11 @@ unsigned long hexstr2ul(char *str) {
     }
     n++;
   }
-  printf("\r\n");
 
   return result;
 }
 
-void abort_if_esc_is_pressed (void) {
+void abort_if_esc_is_pressed(void) {
   if ((*((byte*)0xFBEC) & 4) == 0) {
     die("Operation cancelled by user.");
   }
