@@ -569,6 +569,25 @@ char http_get_headers(char *conn) {
   return ERR_OK;
 }
 
+
+char tcp_get_databyte(char *conn, data_buffer_t *data_buffer) {
+
+  while (data_buffer->data_fetched < headers_info.content_length) {
+    if (data_buffer->current_pos < data_buffer->size) { // still have data in the buffer
+      data_buffer->data_fetched++;
+      data_buffer->current_pos++;
+      return data_buffer->data[data_buffer->current_pos-1];
+    } else { // There is no more data in the buffer. Needs to be fetched
+      run_or_die(tcp_get(conn, data_buffer));
+      data_buffer->current_pos = 0;
+    }
+  }
+
+  data_buffer->no_more_data = 1;
+
+  return '\0';
+}
+
 char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
 
   if (headers_info.is_chunked == 1) {
@@ -576,21 +595,8 @@ char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
     printf("TODO: chunked transfer\r\n");
     // TODO
   } else {
-    while (data_buffer->data_fetched < headers_info.content_length) {
-      if (data_buffer->current_pos < data_buffer->size) { // still have data in the buffer
-        data_buffer->data_fetched++;
-        data_buffer->current_pos++;
-        return data_buffer->data[data_buffer->current_pos-1];
-      } else { // There is no more data in the buffer. Needs to be fetched
-        run_or_die(tcp_get(conn, data_buffer));
-        data_buffer->current_pos = 0;
-      }
-    }
+    return tcp_get_databyte(conn, data_buffer);
   }
-
-  data_buffer->no_more_data = 1;
-
-  return '\0';
 }
 
 // accepts the following special names in pathfilename:
