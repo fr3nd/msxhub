@@ -102,13 +102,15 @@ typedef struct {
 typedef struct {
   int size;
   int current_pos;
+  unsigned long data_fetched;
+  char no_more_data;
   char data[TCP_BUFFER_SIZE];
-
 } data_buffer_t;
 
 typedef struct {
   unsigned int status_code;
   unsigned long content_length;
+  char is_chunked;
 } headers_info_t;
 
 /*** global variables {{{ ***/
@@ -381,6 +383,11 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
 
   n = 0;
 
+  data_buffer->size = 0;
+  data_buffer->current_pos = 0;
+  data_buffer->no_more_data = 0;
+  data_buffer->data[0] = '\n';
+
   while(1) {
     // AbortIfEscIsPressed();
     sys_timer_hold = *SYSTIMER;
@@ -445,6 +452,7 @@ void get_unapi_version_string(char *unapiver) {
 void init_headers_info(void) {
   headers_info.content_length = 0;
   headers_info.status_code = 0;
+  headers_info.is_chunked = 0;
 }
 
 void init_unapi(void) {
@@ -541,6 +549,11 @@ char http_get_headers(char *conn) {
             tolower_str(title);
             if (strcmp(title, "content-length") == 0) {
               headers_info.content_length = (unsigned long)atol(value);
+            } else if (strcmp(title, "transfer-encoding") == 0) {
+              if (strcmp(value, "chunked") == 0) {
+                debug("Transfer encoding is chunked.");
+                headers_info.is_chunked = 1;
+              }
             }
           }
         }
@@ -551,28 +564,53 @@ char http_get_headers(char *conn) {
 
   data_buffer->current_pos++; // Ignore \n
 
+  data_buffer->data_fetched = 0;
+
   return ERR_OK;
 }
 
+char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
+
+  if (headers_info.is_chunked == 1) {
+    data_buffer->no_more_data = 1;
+    printf("TODO: chunked transfer\r\n");
+    // TODO
+  } else {
+    while (data_buffer->data_fetched < headers_info.content_length) {
+      if (data_buffer->current_pos < data_buffer->size) { // still have data in the buffer
+        data_buffer->data_fetched++;
+        data_buffer->current_pos++;
+        return data_buffer->data[data_buffer->current_pos-1];
+      } else { // There is no more data in the buffer. Needs to be fetched
+        run_or_die(tcp_get(conn, data_buffer));
+        data_buffer->current_pos = 0;
+      }
+    }
+  }
+
+  data_buffer->no_more_data = 1;
+
+  return '\0';
+}
 
 // accepts the following special names in pathfilename:
 // - CON sends output to stdout
 // - VAR sends output to var in data with maxdata
 //
-// note, maxdata always has to be >0
-char http_get_content(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename, char *data, int maxdata) {
-  unsigned long bytes_fetched = 1;
-  char *d;
+// note,use a negative value for maxdata when storing to file
+char http_get_content(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data) {
   int fp;
   int n;
+  char buffer[TCP_BUFFER_SIZE];
   unsigned long bytes_written;
-  char buffer[255];
   char progress_bar_size;
+  char c;
   char *file_name;
 
   run_or_die(http_send(conn, hostname, port, method, path));
   run_or_die(http_get_headers(conn));
 
+  // Prepare file handlers
   if (strcmp(pathfilename, "CON") == 0) {
     fp = 1;
   } else if (strcmp(pathfilename, "VAR") == 0) {
@@ -581,15 +619,14 @@ char http_get_content(char *conn, char *hostname, unsigned int port, char *metho
     fp = create(pathfilename, O_RDWR, 0x00);
   }
 
-  // Error is in the least significative byte of p
-  if (fp < 0) {
+  if (fp < 0) { // Error is in the least significative byte of p
     n = (fp >> 0) & 0xff;
     printf("Error opening file %s: 0x%X\r\n", pathfilename, n);
     explain(buffer, n);
     die("%s", buffer);
   }
 
-  if (fp > 4 && fp < 128) { // not special device
+  if (fp > 4 && fp < 128) { // If it's a regular file: progress bar
     bytes_written = 0;
 
     printf("\33x5"); // Disable cursor
@@ -597,47 +634,43 @@ char http_get_content(char *conn, char *hostname, unsigned int port, char *metho
     file_name = (unsigned char*)parse_pathname(0, pathfilename);
   }
 
+
+  // Get data loop
   n = 0;
-  while (bytes_fetched < headers_info.content_length && n < maxdata) { // Repeat until all data is fetched
-    if (data_buffer->current_pos == data_buffer->size) { // Get more data from socket if reached end of buffer
-      run_or_die(tcp_get(conn, data_buffer));
-      data_buffer->current_pos = 0;
-    }
-    if (fp < 128) {
-      write(&data_buffer->data[data_buffer->current_pos], data_buffer->size - data_buffer->current_pos, fp);
-    } else { // store to variable
-      while (data_buffer->current_pos < data_buffer->size && n < maxdata) {
-        data[n] = data_buffer->data[data_buffer->current_pos];
+  while (data_buffer->no_more_data == 0 && n != maxdata) {
+    if (fp < 128) { // Store result to file
+      while (n < TCP_BUFFER_SIZE && data_buffer->no_more_data == 0) {
+        buffer[n] = http_get_databyte(conn, data_buffer);
         n++;
-        data_buffer->current_pos++;
+      }
+      if (data_buffer->no_more_data == 1) {
+        n--; // decrease 1 to avoid copyying the null char
+      };
+      if (fp > 4) { // It's a regular file
+        bytes_written += n;
+        printf("\r%-12s ", file_name);
+        progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
+      }
+      write(buffer, n, fp);
+    } else { // Store result to string
+      while (n != maxdata && data_buffer->no_more_data == 0) {
+        data[n] = http_get_databyte(conn, data_buffer);
+        n++;
       }
     }
-
-    if (fp > 4 && fp < 128) { // not special device
-      bytes_written += data_buffer->size - data_buffer->current_pos;
-
-      printf("\r%-12s ", file_name);
-      progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
-    }
-
-    if (fp == 128) {
-      bytes_fetched = n;
-      data[n-1] = '\0';
-    } else {
-      bytes_fetched = bytes_fetched + data_buffer->size - data_buffer->current_pos;
-    }
-    data_buffer->current_pos = data_buffer->size;
+    n = 0;
   }
 
-  if (fp > 4 && fp < 128) { // not special device
+  if (fp > 4 && fp < 128) { // if it's a regular file
     printf("\r\n");
     printf("\33y5"); // Enable cursor
     close(fp);
   }
-  run_or_die(tcp_close(conn));
 
+  run_or_die(tcp_close(conn));
   return ERR_OK;
 }
+
 
 /*** HTTP functions }}} ***/
 
@@ -879,7 +912,7 @@ void install(char const *package) {
 
   printf("- Getting list of files for package %s...\r\n", package);
   get_hostname_from_url(baseurl, hostname);
-  run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/vi/files", "VAR", files, MAX_FILES_SIZE));
+  run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/vi/files", "VAR", MAX_FILES_SIZE, files));
 
   strcpy(local_path, progsdir);
   strcat(local_path, "\\");
@@ -910,20 +943,21 @@ void install(char const *package) {
     next_line = strchr(line, '\n');
     if (next_line) *next_line = '\0'; // temporarily terminate the current line
 
-    strcpy(path, "/files/vi/latest/");
-    strcat(path, line);
+    if (strlen(line) > 0 ) {
+      strcpy(path, "/files/vi/latest/");
+      strcat(path, line);
 
-    strcpy(local_path, progsdir);
-    strcat(local_path, "\\vi\\");
-    strcat(local_path, line);
+      strcpy(local_path, progsdir);
+      strcat(local_path, "\\vi\\");
+      strcat(local_path, line);
 
-    debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
-    run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, NULL, 1));
+      debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
+      run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, -1, NULL));
+    }
 
     if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
     line = next_line ? (next_line+1) : NULL;
   }
-
 }
 
 void configure(void) {
