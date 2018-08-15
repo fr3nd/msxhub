@@ -141,6 +141,7 @@ void debug(const char *s, ...);
 void debug_nocrlf(const char *s, ...);
 void trim(char * s);
 void tolower_str(char *str);
+void toupper_str(char *str);
 unsigned long hexstr2ul(char *str);
 void abort_if_esc_is_pressed(void);
 /*** prototypes }}} ***/
@@ -659,7 +660,7 @@ char http_get_content(char *conn, char *hostname, unsigned int port, char *metho
     bytes_written = 0;
 
     printf("\33x5"); // Disable cursor
-    progress_bar_size = get_screen_size() - 17 - 12;
+    progress_bar_size = get_screen_size() - 24 - 12;
     file_name = (unsigned char*)parse_pathname(0, pathfilename);
   }
 
@@ -714,12 +715,12 @@ void progress_bar(unsigned long current, unsigned long total, char size, char *u
       putchar('-');
     }
   } else {
-    m = (int)((float)current / total * size - 2);
+    m = (int)((float)current / total * size);
     for (n=0; n < m; n++) {
       putchar('=');
     }
     putchar('>');
-    for (n=m; n < size - 2; n++) {
+    for (n = m; n < size; n++) {
       putchar(' ');
     }
   }
@@ -767,6 +768,14 @@ void tolower_str(char *str) {
 
   for(int i = 0; str[i]; i++){
     str[i] = tolower(str[i]);
+  }
+}
+
+void toupper_str(char *str) {
+  int i;
+
+  for(int i = 0; str[i]; i++){
+    str[i] = toupper(str[i]);
   }
 }
 
@@ -975,9 +984,13 @@ void install(char const *package) {
   read_config();
   init_unapi();
 
+  toupper_str(package);
   printf("- Getting list of files for package %s...\r\n", package);
   get_hostname_from_url(baseurl, hostname);
-  run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/vi/files", "VAR", MAX_FILES_SIZE, files));
+  strcpy(path, "/files/");
+  strcat(path, package);
+  strcat(path, "/latest/files");
+  run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
   strcpy(local_path, progsdir);
   strcat(local_path, "\\");
@@ -1009,11 +1022,15 @@ void install(char const *package) {
     if (next_line) *next_line = '\0'; // temporarily terminate the current line
 
     if (strlen(line) > 0 ) {
-      strcpy(path, "/files/vi/latest/");
+      strcpy(path, "/files/");
+      strcat(path, package);
+      strcat(path, "/latest/get/");
       strcat(path, line);
 
       strcpy(local_path, progsdir);
-      strcat(local_path, "\\vi\\");
+      strcat(local_path, "\\");
+      strcat(local_path, package);
+      strcat(local_path, "\\");
       strcat(local_path, line);
 
       debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
