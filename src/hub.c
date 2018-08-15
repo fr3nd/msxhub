@@ -548,8 +548,12 @@ char http_get_headers(char *conn) {
           data_buffer->current_pos++;
           debug("< %s", header);
           if (x == 0) { // first header received
-            // TODO Implement redirects and other error codes
             parse_response(header);
+            if (headers_info.status_code == 404) {
+              die("Package not found.");
+            } else if (headers_info.status_code != 200) {
+              die ("HTTP Error: %d", headers_info.status_code);
+            }
           } else {
             parse_header(header, title, value);
             tolower_str(title);
@@ -711,7 +715,7 @@ void progress_bar(unsigned long current, unsigned long total, char size, char *u
 
   putchar('[');
   if (headers_info.is_chunked == 1) {
-    for (n=0; n < size-1; n++) {
+    for (n=0; n <= size + 1; n++) {
       putchar('-');
     }
   } else {
