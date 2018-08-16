@@ -1,9 +1,7 @@
 // vim:foldmethod=marker:foldlevel=0
 
 #include "dos.h"
-
-
-/*** DOS functions {{{ ***/
+#include "globals.h"
 
 char get_screen_size(void) __naked {
   __asm
@@ -297,5 +295,3 @@ char get_env(char* name, char* buffer, char buffer_size) __naked {
     ret
   __endasm;
 }
-
-/*** DOS functions }}} ***/

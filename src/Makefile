@@ -15,7 +15,8 @@ IHX_FILES := $(subst .c,.ihx,$(C_FILES))
 REL_IHX_FILES := $(subst .c,.rel,$(C_FILES))
 LIB_FILES := $(wildcard $(INCLUDEDIR)/*.lib)
 
-CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size
+CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 --opt-code-speed
+#CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size
 #CCFLAGS := --code-loc 0x0178 --data-loc 0 --disable-warning 196 -mz80 --no-std-crt0
 
 all: $(PROGRAM)
