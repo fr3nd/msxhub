@@ -392,9 +392,9 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
 
 char http_get_headers(char *conn) {
   int m, x;
-  /*char header[MAX_HEADER_SIZE];*/
-  /*char title[32];*/
-  /*char value[MAX_HEADER_SIZE];*/
+  char header[MAX_HEADER_SIZE];
+  char title[32];
+  char value[MAX_HEADER_SIZE];
   char empty_line;
 
   x = 0;

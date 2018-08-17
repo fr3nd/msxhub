@@ -134,9 +134,4 @@ extern unapi_connection_parameters *parameters;
 extern headers_info_t headers_info;
 extern data_buffer_t *data_buffer;
 
-
-extern char header[MAX_HEADER_SIZE];
-extern char title[32];
-extern char value[MAX_HEADER_SIZE];
-
 #endif /* !GLOBALS_H */
