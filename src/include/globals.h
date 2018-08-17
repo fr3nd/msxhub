@@ -124,6 +124,7 @@ typedef struct {
 extern char DEBUG;
 extern char msxdosver;
 extern char unapiver[90];
+extern char hubdrive;
 extern char hubpath[MAX_PATH_SIZE];
 extern char configpath[MAX_PATH_SIZE];
 extern char progsdir[MAX_PATH_SIZE];

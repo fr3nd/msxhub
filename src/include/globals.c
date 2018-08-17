@@ -13,6 +13,7 @@
 char DEBUG;
 char msxdosver;
 char unapiver[90];
+char hubdrive;
 char hubpath[MAX_PATH_SIZE];
 char configpath[MAX_PATH_SIZE];
 char progsdir[MAX_PATH_SIZE];

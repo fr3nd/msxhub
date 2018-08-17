@@ -751,12 +751,15 @@ void init(void) {
     die("This program requires MSX-DOS 2 to run.");
   }
 
-  // Get the full path of the program and extract only the directory
+  // Get the full path of the program
   get_env("PROGRAM", hubpath, sizeof(hubpath));
-  p = parse_pathname(0, hubpath);
-  *((char*)p) = '\0';
+  hubdrive = hubpath[0];
+  hubpath[0] = hubdrive;
+  hubpath[1] = '\0';
+  strcat(hubpath, ":\\HUB");
+
   strcpy(configpath, hubpath);
-  strcat(configpath, "CONFIG");
+  strcat(configpath, "\\CONFIG");
   debug("Configpath: %s", configpath);
 }
 
@@ -919,39 +922,6 @@ void install(char const *package) {
     line = next_line ? (next_line+1) : NULL;
   }
 
-  // Download bat files
-  printf("- Getting list of bat files for package %s...\r\n", package);
-
-  strcpy(path, "/files/");
-  strcat(path, package);
-  strcat(path, "/latest/batfiles");
-  run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
-
-  printf("- Downloading bat files...\r\n");
-  line = files;
-  // Iterate trough all files
-  // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
-  while (line) {
-    next_line = strchr(line, '\n');
-    if (next_line) *next_line = '\0'; // temporarily terminate the current line
-
-    if (strlen(line) > 0 ) {
-      strcpy(path, "/files/");
-      strcat(path, package);
-      strcat(path, "/latest/bat/");
-      strcat(path, line);
-
-      strcpy(local_path, hubpath);
-      strcat(local_path, "BAT\\");
-      strcat(local_path, line);
-
-      debug("Downloading %s %s\r\n", hostname, path);
-      run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, -1, NULL));
-    }
-
-    if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
-    line = next_line ? (next_line+1) : NULL;
-  }
   printf("- Done!\r\n");
 }
 
@@ -964,9 +934,23 @@ void configure(void) {
   // TODO configure autoexec.bat
 
   printf("Welcome to MSX Hub!\r\n\n");
-  printf("This wizard will guide you through the configuration process.\r\n\n");
+  printf("It looks like it's the first time you run MSX Hub. It's going to be automatically configured.\r\n\n");
 
-  printf("* Configuration directory: %s\r\n", configpath);
+  printf("- Main directory: %s\r\n", hubpath);
+
+  // Create main dir if it doesn't exist
+  fp = create(hubpath, O_RDWR, ATTR_DIRECTORY);
+  // Error is in the least significative byte of fp
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n != DIRX) {
+      printf("Error creating main directory: 0x%X\r\n", n);
+      explain(buffer, n);
+      die("%s", buffer);
+    }
+  }
+
+  printf("- Configuration directory: %s\r\n", configpath);
 
   // Create config dir if it doesn't exist
   fp = create(configpath, O_RDWR, ATTR_DIRECTORY);
@@ -987,42 +971,13 @@ void configure(void) {
     }
   }
 
-  // Guess the default install directory
-  progsdir[0] = configpath[0];
+  progsdir[0] = hubdrive;
   progsdir[1] = '\0';
-  strcat(progsdir, ":\\HUB\\PROGRAMS");
-
-  // Configure where to install programs
-  printf("Where are programs going to be installed? (Default: %s)\r\n", progsdir);
-  gets(buffer);
-  if (buffer[0] != '\0') {
-    strcpy(progsdir, buffer);
-  }
+  strcat(progsdir, ":\\");
+  printf("- Programs are going to be installed in %s\r\n", progsdir);
   save_config("PROGSDIR", progsdir);
-  fp = create(progsdir, O_RDWR, ATTR_DIRECTORY);
-  if (fp < 0) {
-    n = (fp >> 0) & 0xff;
-    if (n != DIRX) { // Ignore error if directory already  exists
-      printf("Error creating configuration directory %s: 0x%X\r\n", progsdir, n);
-      explain(buffer, n);
-      die("%s", buffer);
-    }
-  }
 
   save_config("BASEURL", "http://msxhub.com/files/");
-
-  // Create bat dir
-  strcpy(buffer, hubpath);
-  strcat(buffer, "BAT");
-  fp = create(buffer, O_RDWR, ATTR_DIRECTORY);
-  if (fp < 0) {
-    n = (fp >> 0) & 0xff;
-    if (n != DIRX) { // Ignore error if directory already  exists
-      printf("Error creating bat directory %s: 0x%X\r\n", buffer, n);
-      explain(buffer, n);
-      die("%s", buffer);
-    }
-  }
 
   printf("Done! MSX Hub configured properly.\r\n");
 }
