@@ -857,6 +857,7 @@ void install(char const *package) {
   char hostname[64];
   char path[MAX_URLPATH_SIZE];
   char local_path[MAX_PATH_SIZE];
+  char installdir[128];
   char *line;
   char *next_line;
   int fp, n;
@@ -866,6 +867,7 @@ void install(char const *package) {
   init_unapi();
 
   toupper_str(package);
+
   printf("- Getting list of files for package %s...\r\n", package);
   get_hostname_from_url(baseurl, hostname);
   strcpy(path, "/files/");
@@ -873,9 +875,15 @@ void install(char const *package) {
   strcat(path, "/latest/files");
   run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
+
+  printf("- Getting installation dir...\r\n");
+  strcpy(path, "/files/");
+  strcat(path, package);
+  strcat(path, "/latest/installdir");
+  run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
+
   strcpy(local_path, progsdir);
-  strcat(local_path, "\\");
-  strcat(local_path, package);
+  strcat(local_path, installdir);
   printf("- Creating destination directory: %s\r\n", local_path);
   fp = create(local_path, O_RDWR, ATTR_DIRECTORY);
   if (fp < 0) {
@@ -909,8 +917,7 @@ void install(char const *package) {
       strcat(path, line);
 
       strcpy(local_path, progsdir);
-      strcat(local_path, "\\");
-      strcat(local_path, package);
+      strcat(local_path, installdir);
       strcat(local_path, "\\");
       strcat(local_path, line);
 
@@ -922,7 +929,9 @@ void install(char const *package) {
     line = next_line ? (next_line+1) : NULL;
   }
 
-  printf("- Done!\r\n");
+  strcpy(local_path, progsdir);
+  strcat(local_path, installdir);
+  printf("- Done! Package %s installed in %s\r\n", package, local_path);
 }
 
 void configure(void) {
@@ -972,8 +981,8 @@ void configure(void) {
   }
 
   progsdir[0] = hubdrive;
-  progsdir[1] = '\0';
-  strcat(progsdir, ":\\");
+  progsdir[1] = ':';
+  progsdir[2] = '\0';
   printf("- Programs are going to be installed in %s\r\n", progsdir);
   save_config("PROGSDIR", progsdir);
 
