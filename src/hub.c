@@ -423,7 +423,7 @@ char http_get_headers(char *conn) {
           if (x == 0) { // first header received
             parse_response(header);
             if (headers_info.status_code == 404) {
-              die("Package not found.");
+              die("Not found.");
             } else if (headers_info.status_code != 200) {
               die ("HTTP Error: %d", headers_info.status_code);
             }
