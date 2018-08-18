@@ -903,6 +903,10 @@ void install(char const *package) {
   }
 
   printf("- Downloading files...\r\n");
+  strcpy(local_path, configpath);
+  strcat(local_path, "\\idb\\");
+  strcat(local_path, package);
+  fp = create(local_path, O_RDWR, 0x00);
   line = files;
   // Iterate trough all files
   // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
@@ -923,11 +927,15 @@ void install(char const *package) {
 
       debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
       run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, -1, NULL));
+
+      strcat(local_path, "\r\n");
+      write(local_path, strlen(local_path), fp);
     }
 
     if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
     line = next_line ? (next_line+1) : NULL;
   }
+  close(fp);
 
   strcpy(local_path, progsdir);
   strcat(local_path, installdir);
@@ -975,6 +983,20 @@ void configure(void) {
       }
     } else {
       printf("Error creating configuration directory: 0x%X\r\n", n);
+      explain(buffer, n);
+      die("%s", buffer);
+    }
+  }
+
+  // Create installed dir if it doesn't exist
+  strcpy(buffer, configpath);
+  strcat(buffer, "\\idb");
+  fp = create(buffer, O_RDWR, ATTR_DIRECTORY);
+  // Error is in the least significative byte of fp
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n != DIRX) {
+      printf("Error creating installed directory: 0x%X\r\n", n);
       explain(buffer, n);
       die("%s", buffer);
     }
