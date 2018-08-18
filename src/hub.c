@@ -991,6 +991,17 @@ void configure(void) {
   printf("Done! MSX Hub configured properly.\r\n");
 }
 
+void list(void) {
+  char hostname[64];
+  char conn = 0;
+
+  read_config();
+  init_unapi();
+
+  get_hostname_from_url(baseurl, hostname);
+  run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/list", "CON", -1, NULL));
+}
+
 void help(char const *command) {
   usage();
   printf("TODO: help message\r\n");
@@ -1032,6 +1043,8 @@ int main(char **argv, int argc) {
     install(commands[1]);
   } else if (strcicmp(commands[0], "configure") == 0) {
     configure();
+  } else if (strcicmp(commands[0], "list") == 0) {
+    list();
   } else if (strcicmp(commands[0], "help") == 0) {
     help(commands[1]);
   } else {
