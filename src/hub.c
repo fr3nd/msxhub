@@ -904,7 +904,7 @@ void install(char const *package) {
 
   printf("- Downloading files...\r\n");
   strcpy(local_path, configpath);
-  strcat(local_path, "\\idb\\");
+  strcat(local_path, "\\IDB\\");
   strcat(local_path, package);
   fp = create(local_path, O_RDWR, 0x00);
   line = files;
@@ -990,7 +990,7 @@ void configure(void) {
 
   // Create installed dir if it doesn't exist
   strcpy(buffer, configpath);
-  strcat(buffer, "\\idb");
+  strcat(buffer, "\\IDB");
   fp = create(buffer, O_RDWR, ATTR_DIRECTORY);
   // Error is in the least significative byte of fp
   if (fp < 0) {
@@ -1034,7 +1034,7 @@ void installed(void) {
 
   // XXX Using DosCall because I wasn't able to implement it myself...
   strcpy(path, configpath);
-  strcat(path, "\\idb\\");
+  strcat(path, "\\IDB\\");
   regs.Words.DE = (int)&path;
   regs.Bytes.B = 0x00;
   regs.Words.IX = (int)&fib;
