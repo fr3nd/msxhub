@@ -1,6 +1,8 @@
 # MsxHub
 
-MsxHub is a MSX application to download and install software from the internet using an UNAPI compatible network card.
+https://www.msxhub.com
+
+[MsxHub](https://www.msxhub.com) is a MSX application to download and install software from the internet using an UNAPI compatible network card.
 
 ## Installation
 
