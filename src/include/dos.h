@@ -18,6 +18,7 @@
 #define READ    #0x48
 #define WRITE   #0x49
 #define IOCTL   #0x4B
+#define DELETE  #0x4D
 #define PARSE   #0x5B
 #define TERM    #0x62
 #define EXPLAIN #0x66
@@ -42,5 +43,6 @@ void exit(int code);
 char dosver(void);
 void explain(char* buffer, char error_code);
 char get_env(char* name, char* buffer, char buffer_size);
+char delete_file(char *file);
 
 #endif

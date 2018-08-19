@@ -935,11 +935,94 @@ void install(char const *package) {
     if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
     line = next_line ? (next_line+1) : NULL;
   }
+
+  // Save the destination dir to IDB too
+  strcpy(local_path, progsdir);
+  strcat(local_path, installdir);
+  strcat(local_path, "\r\n");
+  write(local_path, strlen(local_path), fp);
+
   close(fp);
 
   strcpy(local_path, progsdir);
   strcat(local_path, installdir);
   printf("- Done! Package %s installed in %s\r\n", package, local_path);
+}
+
+void uninstall(char *package) {
+  int fp;
+  int n, m;
+  char c;
+  int bytes_read;
+  char buffer[MAX_PATH_SIZE];
+  char current_file[MAX_PATH_SIZE];
+
+  // Check if installed
+
+  toupper_str(package);
+
+  printf("Uninstalling package %s...\r\n", package);
+
+  strcpy(buffer, configpath);
+  strcat(buffer, "\\IDB\\");
+  strcat(buffer, package);
+  fp = open(buffer, O_RDONLY);
+
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n == 0xD7) {
+      die("Package %s is not installed.", package);
+    } else {
+      printf("Error reading configuration %s: 0x%X\r\n", buffer, n);
+      explain(buffer, n);
+      die("%s", buffer);
+    }
+  }
+
+  // Get list of files and deleting them
+
+  current_file[0] = '\0';
+  m = 0;
+  while(1) {
+    bytes_read = read(buffer, MAX_PATH_SIZE, fp);
+
+    for (n=0; n<bytes_read ;n++) {
+      if (buffer[n] != '\n' && buffer[n] != '\r') {
+        current_file[m] = buffer[n];
+        m++;
+      } else if (buffer[n] == '\n') {
+        current_file[m] = '\0';
+        printf("- %s\r\n", current_file);
+        c = delete_file(current_file);
+        if (c != 0) {
+          if (c == 0xD7) { // File does not exist. Continue
+            printf("WARNING: File %s does not exist...\r\n", current_file);
+          } else { // Another error
+            printf("Error deleting file %s: 0x%X\r\n", current_file, c);
+            explain(buffer, c);
+            die("%s", buffer);
+          }
+        }
+        m = 0;
+      }
+    }
+
+    if (bytes_read < MAX_PATH_SIZE) {
+      break;
+    }
+  }
+  close(fp);
+
+  // Remove file in idb
+  strcpy(buffer, configpath);
+  strcat(buffer, "\\IDB\\");
+  strcat(buffer, package);
+  c = delete_file(buffer);
+  if (c != 0) {
+    printf("Error deleting file %s: 0x%X\r\n", current_file, c);
+    explain(buffer, c);
+    die("%s", buffer);
+  }
 }
 
 void configure(void) {
@@ -1086,6 +1169,8 @@ int main(char **argv, int argc) {
 
   if (strcicmp(commands[0], "install") == 0) {
     install(commands[1]);
+  } else if (strcicmp(commands[0], "uninstall") == 0) {
+    uninstall(commands[1]);
   } else if (strcicmp(commands[0], "configure") == 0) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {

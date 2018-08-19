@@ -295,3 +295,25 @@ char get_env(char* name, char* buffer, char buffer_size) __naked {
     ret
   __endasm;
 }
+
+
+char delete_file(char *file) __naked {
+  file;
+  __asm
+    push ix
+    ld ix,#4
+    add ix,sp
+
+    ld e,0(ix)
+    ld d,1(ix)
+
+    ld c, DELETE
+    DOSCALL
+
+    ld h, #0xff
+    ld l, a
+
+    pop ix
+    ret
+  __endasm;
+}
