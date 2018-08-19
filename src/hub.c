@@ -804,6 +804,7 @@ const char* get_config(char* filename) {
   if (fp < 0) {
     n = (fp >> 0) & 0xff;
     printf("Error reading configuration %s: 0x%X\r\n", buffer, n);
+    printf("Did you run 'hub configure'?\r\n");
     explain(buffer, n);
     die("%s", buffer);
   }
