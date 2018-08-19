@@ -1024,6 +1024,29 @@ void list(void) {
   run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/list", "CON", -1, NULL));
 }
 
+void installed(void) {
+  char path[128];
+  file_info_block_t fib;
+
+  read_config();
+
+  printf("- List of installed packages:\r\n");
+
+  // XXX Using DosCall because I wasn't able to implement it myself...
+  strcpy(path, configpath);
+  strcat(path, "\\idb\\");
+  regs.Words.DE = (int)&path;
+  regs.Bytes.B = 0x00;
+  regs.Words.IX = (int)&fib;
+  DosCall(FFIRST, &regs, REGS_ALL, REGS_AF);
+
+  while (regs.Bytes.A == 0) {
+    printf("%s\r\n", fib.filename);
+    DosCall(FNEXT, &regs, REGS_ALL, REGS_AF);
+  }
+
+}
+
 void help(char const *command) {
   usage();
   printf("TODO: help message\r\n");
@@ -1067,6 +1090,8 @@ int main(char **argv, int argc) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {
     list();
+  } else if (strcicmp(commands[0], "installed") == 0) {
+    installed();
   } else if (strcicmp(commands[0], "help") == 0) {
     help(commands[1]);
   } else {

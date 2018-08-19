@@ -119,6 +119,18 @@ typedef struct {
   char is_chunked;
 } headers_info_t;
 
+typedef struct {
+  char ff;
+  char filename[13];
+  char attributes;
+  char time_of_modification[2];
+  char date_of_modification[2];
+  unsigned int start_cluster;
+  unsigned long file_size;
+  char logical_drive;
+  char internal[38];
+} file_info_block_t;
+
 // Declaring global variables
 
 extern char DEBUG;

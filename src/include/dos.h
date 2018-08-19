@@ -10,6 +10,8 @@
 #define CONIN   #0x01
 #define CONOUT  #0x02
 #define CURDRV  #0x19
+#define FFIRST  #0x40
+#define FNEXT   #0x41
 #define OPEN    #0x43
 #define CREATE  #0x44
 #define CLOSE   #0x45
