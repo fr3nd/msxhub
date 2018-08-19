@@ -1179,6 +1179,8 @@ int main(char **argv, int argc) {
     installed();
   } else if (strcicmp(commands[0], "help") == 0) {
     help(commands[1]);
+  } else if (strcicmp(commands[0], "version") == 0) {
+    printf("MsxHub version %s\r\n", MSXHUB_VERSION);
   } else {
     help("");
   }
