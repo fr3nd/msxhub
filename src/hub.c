@@ -736,10 +736,6 @@ int strcicmp(char const *a, char const *b) {
 /*** functions }}} ***/
 
 /*** helper functions{{{ ***/
-void usage() {
-  printf("hub command\r\n");
-}
-
 void init(void) {
   int p;
 
@@ -867,6 +863,10 @@ void install(char const *package) {
   int fp, n;
   char c;
 
+  if (package[0] == '\0') {
+    die("Package name not specified.");
+  }
+
   read_config();
   init_unapi();
 
@@ -960,6 +960,10 @@ void uninstall(char *package) {
   int bytes_read;
   char buffer[MAX_PATH_SIZE];
   char current_file[MAX_PATH_SIZE];
+
+  if (package[0] == '\0') {
+    die("Package name not specified.");
+  }
 
   // Check if installed
 
@@ -1134,9 +1138,43 @@ void installed(void) {
 
 }
 
+void version() {
+  printf("MsxHub version %s\r\n", MSXHUB_VERSION);
+}
+
+void usage() {
+  printf("Usage: hub {install,uninstall,configure,list,installed,help,version}\r\n");
+}
+
 void help(char const *command) {
-  usage();
-  printf("TODO: help message\r\n");
+  version();
+  if (command[0] == '\0') {
+    usage();
+    printf("\r\nUse 'hub help COMMAND' for info about a specific command.\r\n");
+    printf("\r\nMsxHub is a MSX software installer. It can download and install packaged software from the internet directly into your MSX.\r\n");
+    printf("An UNAPI compatible network card and a working internet connection is required.\r\n");
+  } else if (strcicmp(command, "install") == 0) {
+    printf("Usage: hub install PACKAGE\r\n\r\n");
+    printf("Installs the specified software package from Internet.\r\n");
+  } else if (strcicmp(command, "uninstall") == 0) {
+    printf("Usage: hub uninstall PACKAGE\r\n\r\n");
+    printf("Uninstalls the specified packaged application from your MSX.\r\n");
+  } else if (strcicmp(command, "configure") == 0) {
+    printf("Usage: hub configure\r\n\r\n");
+    printf("Configures the application for first time run.\r\n");
+  } else if (strcicmp(command, "list") == 0) {
+    printf("Usage: hub list\r\n\r\n");
+    printf("Show the list of available packages to be installed.\r\n");
+  } else if (strcicmp(command, "installed") == 0) {
+    printf("Usage: hub installed\r\n\r\n");
+    printf("Show the list of currently installed packages.\r\n");
+  } else if (strcicmp(command, "help") == 0) {
+    printf("Usage: hub help COMMAND\r\n\r\n");
+    printf("Show help about the specified command.");
+  } else if (strcicmp(command, "version") == 0) {
+    printf("Shows current version: ");
+    version();
+  }
 }
 
 /*** commands }}} ***/
@@ -1184,7 +1222,7 @@ int main(char **argv, int argc) {
   } else if (strcicmp(commands[0], "help") == 0) {
     help(commands[1]);
   } else if (strcicmp(commands[0], "version") == 0) {
-    printf("MsxHub version %s\r\n", MSXHUB_VERSION);
+    version();
   } else {
     help("");
   }
