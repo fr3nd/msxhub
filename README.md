@@ -72,3 +72,5 @@ Pull requests are welcome. For major changes, please open an issue first to disc
 * Javi Lavandeira for the fantastic [Relearning MSX](https://www.lavandeira.net/relearning-msx/) tutorials, that made me re-introduce to the MSX world.
 * All the people behind the [MSX Assembly Page](http://map.grauw.nl/). Probably the biggest source of documentation for MSX developers.
 * Everyone in the msx.org forums. You guys always helped me when I had questions.
+
+<img src="https://piwik.fr3nd.net/piwik.php?idsite=18&amp;rec=1" style="border:0" alt="" />
