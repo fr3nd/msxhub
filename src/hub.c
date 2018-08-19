@@ -793,7 +793,11 @@ const char* get_config(char* filename) {
   int n;
   char buffer[255] = { '\0' };
 
-  // TODO ENV variable should have precedence over file
+  // Env variables take precedence over config files
+  get_env(filename, buffer, sizeof(buffer));
+  if (buffer[0] != '\0') {
+    return buffer;
+  }
 
   strcpy(buffer, configpath);
   strcat(buffer, "\\");
