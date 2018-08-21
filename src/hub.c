@@ -307,7 +307,7 @@ void get_unapi_version_string(char *unapiver) {
   byte version_main;
   byte version_sec;
   uint name_address;
-  char buffer[80];
+  /*char buffer[80];*/
   int n;
 
   UnapiCall(code_block, UNAPI_GET_INFO, &regs, REGS_NONE, REGS_MAIN);
@@ -315,15 +315,19 @@ void get_unapi_version_string(char *unapiver) {
   version_sec = regs.Bytes.C;
   name_address = regs.UWords.HL;
 
-  n = 0;
-  do {
-    c = UnapiRead(code_block, name_address);
-    buffer[n] = c;
-    name_address++;
-    n++;
-  } while (c != '\0');
+  // XXX
+  // GR8NET doesn't seem to return the name string properly.
+  // Disabling it for now...
+  // See https://www.msx.org/forum/msx-talk/general-discussion/msxhub-first-beta-release-call-for-help
+  /*n = 0;*/
+  /*do {*/
+  /*  c = UnapiRead(code_block, name_address);*/
+  /*  buffer[n] = c;*/
+  /*  name_address++;*/
+  /*  n++;*/
+  /*} while (c != '\0');*/
 
-  sprintf(unapiver, "%s v%i.%i", buffer, version_main, version_sec);
+  sprintf(unapiver, "%s v%i.%i", "UNAPI", version_main, version_sec);
   debug("%s", unapiver);
 }
 
