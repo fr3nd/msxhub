@@ -383,7 +383,7 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
   sprintf(buffer, "Host: %s\r\n", hostname);
   run_or_die(tcp_send(conn, buffer));
 
-  sprintf(buffer, "User-Agent: MsxHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
+  sprintf(buffer, "User-Agent: MSXHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
   run_or_die(tcp_send(conn, buffer));
 
   run_or_die(tcp_send(conn, "Accept: */*\r\n"));
@@ -1144,7 +1144,7 @@ void installed(void) {
 }
 
 void version() {
-  printf("MsxHub version %s\r\n", MSXHUB_VERSION);
+  printf("MSXHub version %s\r\n", MSXHUB_VERSION);
 }
 
 void usage() {
@@ -1156,7 +1156,7 @@ void help(char const *command) {
   if (command[0] == '\0') {
     usage();
     printf("\r\nUse 'hub help COMMAND' for info about a specific command.\r\n");
-    printf("\r\nMsxHub is a MSX software installer. It can download and install packaged software from the internet directly into your MSX.\r\n");
+    printf("\r\nMSXHub is a MSX software installer. It can download and install packaged software from the internet directly into your MSX.\r\n");
     printf("An UNAPI compatible network card and a working internet connection is required.\r\n");
   } else if (strcicmp(command, "install") == 0) {
     printf("Usage: hub install PACKAGE\r\n\r\n");
