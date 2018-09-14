@@ -303,12 +303,12 @@ char tcp_close(char *conn) {
 }
 
 void get_unapi_version_string(char *unapiver) {
-  char c;
+  /*char c;*/
   byte version_main;
   byte version_sec;
   uint name_address;
   /*char buffer[80];*/
-  int n;
+  /*int n;*/
 
   UnapiCall(code_block, UNAPI_GET_INFO, &regs, REGS_NONE, REGS_MAIN);
   version_main = regs.Bytes.B;
@@ -338,7 +338,6 @@ void init_headers_info(void) {
 }
 
 void init_unapi(void) {
-  ip_addr ip;
   char err_code;
 
   // FIXME Not sure why it doesn't work with malloc...
@@ -513,10 +512,9 @@ char http_get_content(char *conn, char *hostname, unsigned int port, char *metho
   int fp;
   int n;
   char buffer[TCP_BUFFER_SIZE];
-  unsigned long bytes_written;
-  char progress_bar_size;
-  char c;
-  char *file_name;
+  unsigned long bytes_written = 0;
+  char progress_bar_size = 0;
+  char *file_name = NULL;
 
   run_or_die(http_send(conn, hostname, port, method, path));
   run_or_die(http_get_headers(conn));
@@ -538,8 +536,6 @@ char http_get_content(char *conn, char *hostname, unsigned int port, char *metho
   }
 
   if (fp > 4 && fp < 128) { // If it's a regular file: progress bar
-    bytes_written = 0;
-
     printf("\33x5"); // Disable cursor
     progress_bar_size = get_screen_size() - 24 - 12;
     file_name = (unsigned char*)parse_pathname(0, pathfilename);
@@ -647,7 +643,7 @@ void trim(char * s) {
 void tolower_str(char *str) {
   int i;
 
-  for(int i = 0; str[i]; i++){
+  for(i = 0; str[i]; i++){
     str[i] = tolower(str[i]);
   }
 }
@@ -655,7 +651,7 @@ void tolower_str(char *str) {
 void toupper_str(char *str) {
   int i;
 
-  for(int i = 0; str[i]; i++){
+  for(i = 0; str[i]; i++){
     str[i] = toupper(str[i]);
   }
 }
@@ -741,8 +737,6 @@ int strcicmp(char const *a, char const *b) {
 
 /*** helper functions{{{ ***/
 void init(void) {
-  int p;
-
   DEBUG = 0;
 
   // Check MSX-DOS version >= 2
