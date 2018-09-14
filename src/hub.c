@@ -847,7 +847,6 @@ void get_hostname_from_url(char *url, char *hostname) {
     token = strtok(NULL, "/:");
     n++;
   }
-
 }
 
 void print_hex(const char *s) {
