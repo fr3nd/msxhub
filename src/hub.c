@@ -823,6 +823,48 @@ void read_config(void) {
 
 /*** commands {{{ ***/
 
+void get_hostname_from_url(char *url, char *hostname) {
+  char buffer[MAX_URL_SIZE];
+  char *token;
+  int n;
+
+  strcpy(buffer, url);
+
+  n = 0;
+  token = strtok(buffer,"/:");
+  while( token != NULL ) {
+    if (n == 1) {
+      strcpy(hostname, token);
+      break;
+    }
+    debug("n: %d token: %s", n, token);
+    token = strtok(NULL, "/:");
+    n++;
+  }
+}
+
+char *get_str_until(char *str, int *p, char *until) {
+  char* result;
+
+  *p = strcspn(str, until);
+  printf("p: %d\r\n", *p);
+  strcpy(result, str);
+  result[*p] = '\0';
+
+  return result;
+}
+
+void parse_url(char *url, url *parsed_url) {
+  char buffer[MAX_URL_SIZE];
+  int pos;
+
+
+  // Get scheme
+  strcpy(buffer, url);
+  strcpy(parsed_url->scheme, get_str_until(buffer, &pos, ":"));
+
+}
+
 void print_hex(const char *s) {
   while(*s)
     printf("%02x ", (unsigned int) *s++);
