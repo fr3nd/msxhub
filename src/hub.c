@@ -7,6 +7,7 @@
 #include "asm.h"
 #include "dos.h"
 #include "morestr.h"
+#include "base64.h"
 
 /*** prototypes {{{ ***/
 void die(const char *s, ...);
@@ -370,8 +371,11 @@ void init_unapi(void) {
 
 /*** HTTP functions {{{ ***/
 
-char http_send(char *conn, char *hostname, unsigned int port, char *method, char *path) {
+char http_send(char *conn, char *hostname, char *username, char *password, unsigned int port, char *method, char *path) {
   char buffer[128];
+  char credentials[128];
+  char credentialsb64[128];
+  int l;
 
   init_headers_info();
 
@@ -382,6 +386,15 @@ char http_send(char *conn, char *hostname, unsigned int port, char *method, char
 
   sprintf(buffer, "Host: %s\r\n", hostname);
   run_or_die(tcp_send(conn, buffer));
+
+  if (username[0] != '\0' && password[0] != '\0') {
+    Base64Init(0);
+    sprintf(credentials, "%s:%s", username, password);
+    l = Base64EncodeChunk(credentials, credentialsb64, strlen(credentials), 1);
+    credentialsb64[l] = '\0';
+    sprintf(buffer, "Authorization: Basic %s\r\n", credentialsb64);
+    run_or_die(tcp_send(conn, buffer));
+  }
 
   sprintf(buffer, "User-Agent: MSXHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
   run_or_die(tcp_send(conn, buffer));
@@ -509,7 +522,7 @@ char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
 // - VAR sends output to var in data with maxdata
 //
 // note,use a negative value for maxdata when storing to file
-char http_get_content(char *conn, char *hostname, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data) {
+char http_get_content(char *conn, char *hostname, char *username, char *password, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data) {
   int fp;
   int n;
   char buffer[TCP_BUFFER_SIZE];
@@ -517,7 +530,7 @@ char http_get_content(char *conn, char *hostname, unsigned int port, char *metho
   char progress_bar_size = 0;
   char *file_name = NULL;
 
-  run_or_die(http_send(conn, hostname, port, method, path));
+  run_or_die(http_send(conn, hostname, username, password, port, method, path));
   run_or_die(http_get_headers(conn));
 
   // Prepare file handlers
@@ -824,26 +837,6 @@ void read_config(void) {
 
 /*** commands {{{ ***/
 
-void get_hostname_from_url(char *url, char *hostname) {
-  char buffer[MAX_URL_SIZE];
-  char *token;
-  int n;
-
-  strcpy(buffer, url);
-
-  n = 0;
-  token = strtok(buffer,"/:");
-  while( token != NULL ) {
-    if (n == 1) {
-      strcpy(hostname, token);
-      break;
-    }
-    debug("n: %d token: %s", n, token);
-    token = strtok(NULL, "/:");
-    n++;
-  }
-}
-
 void parse_url(char *url, url *parsed_url) {
   char buffer[MAX_URL_SIZE];
   char *pbuffer;
@@ -901,7 +894,7 @@ void print_hex(const char *s) {
 void install(char const *package) {
   char conn = 0;
   char files[MAX_FILES_SIZE];
-  char hostname[64];
+  url parsed_url;
   char path[MAX_URLPATH_SIZE];
   char local_path[MAX_PATH_SIZE];
   char installdir[128];
@@ -920,18 +913,19 @@ void install(char const *package) {
   toupper_str(package);
 
   printf("- Getting list of files for package %s...\r\n", package);
-  get_hostname_from_url(baseurl, hostname);
+  parse_url(baseurl, &parsed_url);
+
   strcpy(path, "/files/");
   strcat(path, package);
   strcat(path, "/latest/files");
-  run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
 
   printf("- Getting installation dir...\r\n");
   strcpy(path, "/files/");
   strcat(path, package);
   strcat(path, "/latest/installdir");
-  run_or_die(http_get_content(&conn, hostname, 80, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
 
   strcpy(local_path, progsdir);
   strcat(local_path, installdir);
@@ -976,8 +970,8 @@ void install(char const *package) {
       strcat(local_path, "\\");
       strcat(local_path, line);
 
-      debug("Downloading %s %s to %s\r\n", hostname, path, local_path);
-      run_or_die(http_get_content(&conn, hostname, 80, "GET", path, local_path, -1, NULL));
+      debug("Downloading %s %s to %s\r\n", parsed_url.hostname, path, local_path);
+      run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", path, local_path, -1, NULL));
 
       strcat(local_path, "\r\n");
       write(local_path, strlen(local_path), fp);
@@ -1152,14 +1146,14 @@ void configure(void) {
 }
 
 void list(void) {
-  char hostname[64];
+  url parsed_url;
   char conn = 0;
 
   read_config();
   init_unapi();
 
-  get_hostname_from_url(baseurl, hostname);
-  run_or_die(http_get_content(&conn, hostname, 80, "GET", "/files/list", "CON", -1, NULL));
+  parse_url(baseurl, &parsed_url);
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", "/files/list", "CON", -1, NULL));
 }
 
 void installed(void) {
@@ -1232,8 +1226,6 @@ int main(char **argv, int argc) {
 
   int i, n;
   char commands[3][20] = {{'\0'}, {'\0'}, {'\0'}};
-
-  url parsed_url;
 
   init();
 
