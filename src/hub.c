@@ -6,6 +6,7 @@
 #include "globals.h"
 #include "asm.h"
 #include "dos.h"
+#include "morestr.h"
 
 /*** prototypes {{{ ***/
 void die(const char *s, ...);
@@ -843,26 +844,52 @@ void get_hostname_from_url(char *url, char *hostname) {
   }
 }
 
-char *get_str_until(char *str, int *p, char *until) {
-  char* result;
-
-  *p = strcspn(str, until);
-  printf("p: %d\r\n", *p);
-  strcpy(result, str);
-  result[*p] = '\0';
-
-  return result;
-}
-
 void parse_url(char *url, url *parsed_url) {
   char buffer[MAX_URL_SIZE];
+  char *pbuffer;
   int pos;
 
-
   // Get scheme
-  strcpy(buffer, url);
-  strcpy(parsed_url->scheme, get_str_until(buffer, &pos, ":"));
+  if (string_starts_with(url, "http://")) {
+    strcpy(parsed_url->scheme, "http");
+  } else {
+    die("Protocol not supported in URL: %s", url);
+  }
 
+  strcpy(buffer, url);
+  pbuffer = &buffer[7]; // Ignore http://
+
+  // Get username and password
+  if (strchr(pbuffer, '@') == NULL) {
+    // URL doesn't have user and password
+    strcpy(parsed_url->username, "");
+    strcpy(parsed_url->password, "");
+  } else {
+    // URL has user and password
+    strcpy(parsed_url->username, get_str_until(pbuffer, &pos, ":"));
+    pbuffer = &pbuffer[pos+1];
+    pos = 0;
+
+    strcpy(parsed_url->password, get_str_until(pbuffer, &pos, "@"));
+    pbuffer = &pbuffer[pos+1];
+    pos = 0;
+  }
+
+  // Get hostname
+  strcpy(parsed_url->hostname, get_str_until(pbuffer, &pos, ":/?"));
+  pbuffer = &pbuffer[pos];
+  pos = 0;
+  if (pbuffer[0] == ':') {
+    &pbuffer++;
+    parsed_url->port = atoi(get_str_until(pbuffer, &pos, "/?"));
+    pbuffer = &pbuffer[pos];
+    pos = 0;
+  } else {
+    parsed_url->port = 80;
+  }
+
+  // Get path
+  strcpy(parsed_url->path, pbuffer);
 }
 
 void print_hex(const char *s) {
@@ -1205,6 +1232,8 @@ int main(char **argv, int argc) {
 
   int i, n;
   char commands[3][20] = {{'\0'}, {'\0'}, {'\0'}};
+
+  url parsed_url;
 
   init();
 
