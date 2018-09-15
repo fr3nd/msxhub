@@ -131,15 +131,6 @@ typedef struct {
   char internal[38];
 } file_info_block_t;
 
-typedef struct {
-	char scheme[10];	/* scheme, without ":" and "//" */
-	char username[30];	/* username, default: NULL */
-	char password[30];	/* password, default: NULL */
-	char host[128];	/* hostname or IP address */
-	int port;	/* port, default: 0 */
-	char path[128];	/* path, without leading "/", default: NULL */
-} url;
-
 // Declaring global variables
 
 extern char DEBUG;
