@@ -2,7 +2,6 @@
  * globals.h
  * Copyright (C) 2018 Carles Amigó <fr3nd@fr3nd.net>
  *
- * Distributed under terms of the MIT license.
  */
 
 #ifndef GLOBALS_H
