@@ -115,7 +115,9 @@ typedef struct {
 typedef struct {
   unsigned int status_code;
   unsigned long content_length;
+  char location[MAX_URL_SIZE];
   char is_chunked;
+  char is_redirect;
 } headers_info_t;
 
 typedef struct {

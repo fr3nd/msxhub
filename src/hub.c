@@ -19,6 +19,7 @@ void tolower_str(char *str);
 void toupper_str(char *str);
 unsigned long hexstr2ul(char *str);
 void abort_if_esc_is_pressed(void);
+void parse_url(char *url, url *parsed_url);
 /*** prototypes }}} ***/
 
 /*** UNAPI functions {{{ ***/
@@ -337,6 +338,8 @@ void init_headers_info(void) {
   headers_info.content_length = 0;
   headers_info.status_code = 0;
   headers_info.is_chunked = 0;
+  headers_info.is_redirect = 0;
+  headers_info.location[0] = '\0';
 }
 
 void init_unapi(void) {
@@ -441,6 +444,8 @@ char http_get_headers(char *conn) {
             parse_response(header);
             if (headers_info.status_code == 404) {
               die("Not found.");
+            } else if (headers_info.status_code >= 300 && headers_info.status_code < 400) {
+              headers_info.is_redirect = 1;
             } else if (headers_info.status_code != 200) {
               die ("HTTP Error: %d", headers_info.status_code);
             }
@@ -449,6 +454,8 @@ char http_get_headers(char *conn) {
             tolower_str(title);
             if (strcmp(title, "content-length") == 0) {
               headers_info.content_length = (unsigned long)atol(value);
+            } else if (strcmp(title, "location") == 0) {
+              strcpy(headers_info.location, value);
             } else if (strcmp(title, "transfer-encoding") == 0) {
               if (strcmp(value, "chunked") == 0) {
                 debug("Transfer encoding is chunked.");
@@ -530,14 +537,26 @@ char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
 // note,use a negative value for maxdata when storing to file
 char http_get_content(char *conn, char *hostname, char *username, char *password, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data) {
   int fp;
-  int n;
+  int n = 0;
   char buffer[TCP_BUFFER_SIZE];
   unsigned long bytes_written = 0;
   char progress_bar_size = 0;
   char *file_name = NULL;
+  url parsed_url;
 
   run_or_die(http_send(conn, hostname, username, password, port, method, path));
   run_or_die(http_get_headers(conn));
+
+  while (headers_info.is_redirect && n < 10) {
+    n++;
+    parse_url(headers_info.location, &parsed_url);
+    if (parsed_url.hostname[0] == '\0') { // Relative URL
+      run_or_die(http_send(conn, hostname, username, password, port, method, parsed_url.path));
+    } else { // Absolute URL
+      run_or_die(http_send(conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, method, parsed_url.path));
+    }
+    run_or_die(http_get_headers(conn));
+  }
 
   // Prepare file handlers
   if (strcmp(pathfilename, "CON") == 0) {
@@ -851,44 +870,60 @@ void parse_url(char *url, url *parsed_url) {
   // Get scheme
   if (string_starts_with(url, "http://")) {
     strcpy(parsed_url->scheme, "http");
+
+    strcpy(buffer, url);
+    pbuffer = &buffer[7]; // Ignore http://
+
+    // Get username and password
+    if (strchr(pbuffer, '@') == NULL) {
+      // URL doesn't have user and password
+      strcpy(parsed_url->username, "");
+      strcpy(parsed_url->password, "");
+    } else {
+      // URL has user and password
+      strcpy(parsed_url->username, get_str_until(pbuffer, &pos, ":"));
+      pbuffer = &pbuffer[pos+1];
+      pos = 0;
+
+      strcpy(parsed_url->password, get_str_until(pbuffer, &pos, "@"));
+      pbuffer = &pbuffer[pos+1];
+      pos = 0;
+    }
+
+    // Get hostname
+    strcpy(parsed_url->hostname, get_str_until(pbuffer, &pos, ":/?"));
+    pbuffer = &pbuffer[pos];
+    pos = 0;
+    if (pbuffer[0] == ':') {
+      &pbuffer++;
+      parsed_url->port = atoi(get_str_until(pbuffer, &pos, "/?"));
+      pbuffer = &pbuffer[pos];
+      pos = 0;
+    } else {
+      parsed_url->port = 80;
+    }
+  } else if (string_starts_with(url, "/")) {
+    parsed_url->scheme[0] = '\0';
+    parsed_url->username[0] = '\0';
+    parsed_url->password[0] = '\0';
+    parsed_url->hostname[0] = '\0';
+    parsed_url->port = 80;
+
+    strcpy(buffer, url);
+    pbuffer = &buffer[0];
   } else {
     die("Protocol not supported in URL: %s", url);
   }
 
-  strcpy(buffer, url);
-  pbuffer = &buffer[7]; // Ignore http://
-
-  // Get username and password
-  if (strchr(pbuffer, '@') == NULL) {
-    // URL doesn't have user and password
-    strcpy(parsed_url->username, "");
-    strcpy(parsed_url->password, "");
-  } else {
-    // URL has user and password
-    strcpy(parsed_url->username, get_str_until(pbuffer, &pos, ":"));
-    pbuffer = &pbuffer[pos+1];
-    pos = 0;
-
-    strcpy(parsed_url->password, get_str_until(pbuffer, &pos, "@"));
-    pbuffer = &pbuffer[pos+1];
-    pos = 0;
-  }
-
-  // Get hostname
-  strcpy(parsed_url->hostname, get_str_until(pbuffer, &pos, ":/?"));
-  pbuffer = &pbuffer[pos];
-  pos = 0;
-  if (pbuffer[0] == ':') {
-    &pbuffer++;
-    parsed_url->port = atoi(get_str_until(pbuffer, &pos, "/?"));
-    pbuffer = &pbuffer[pos];
-    pos = 0;
-  } else {
-    parsed_url->port = 80;
-  }
-
   // Get path
   strcpy(parsed_url->path, pbuffer);
+
+  debug("- url scheme: %s", parsed_url->scheme);
+  debug("- url username: %s", parsed_url->username);
+  debug("- url password: %s", parsed_url->password);
+  debug("- url hostname: %s", parsed_url->hostname);
+  debug("- url port: %d", parsed_url->port);
+  debug("- url path: %s", parsed_url->path);
 }
 
 void print_hex(const char *s) {
