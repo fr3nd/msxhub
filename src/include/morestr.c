@@ -39,3 +39,14 @@ char *get_str_until(char *str, int *p, char *until) {
 
   return result;
 }
+
+// https://stackoverflow.com/questions/5457608/how-to-remove-the-character-at-a-given-index-from-a-string-in-c
+void remove_char(char *str, char c) {
+
+  char *src, *dst;
+  for (src = dst = str; *src != '\0'; src++) {
+    *dst = *src;
+    if (*dst != c) dst++;
+  }
+  *dst = '\0';
+}

@@ -504,7 +504,13 @@ char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
 
       buffer[n-1] = '\0';
       data_buffer->chunk_size = hexstr2ul(buffer);
+
+      // Ignore data until last \n
+      while ((buffer[0] = tcp_get_databyte(conn, data_buffer)) != '\n') {
+        printf("DATA: %d %d\r\n", buffer[0], '\n');
+      }
     }
+
     if (data_buffer->chunk_size == 0) {
       data_buffer->chunked_data_available = 0;
       data_buffer->no_more_data = 1;
@@ -960,6 +966,7 @@ void install(char const *package) {
     if (next_line) *next_line = '\0'; // temporarily terminate the current line
 
     if (strlen(line) > 0 ) {
+      remove_char(line, '\r');
       strcpy(path, "/files/");
       strcat(path, package);
       strcat(path, "/latest/get/");
