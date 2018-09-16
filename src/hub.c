@@ -918,14 +918,14 @@ void install(char const *package) {
   strcpy(path, "/files/");
   strcat(path, package);
   strcat(path, "/latest/files");
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", path, "VAR", MAX_FILES_SIZE, files));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
 
   printf("- Getting installation dir...\r\n");
   strcpy(path, "/files/");
   strcat(path, package);
   strcat(path, "/latest/installdir");
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
 
   strcpy(local_path, progsdir);
   strcat(local_path, installdir);
@@ -971,7 +971,7 @@ void install(char const *package) {
       strcat(local_path, line);
 
       debug("Downloading %s %s to %s\r\n", parsed_url.hostname, path, local_path);
-      run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", path, local_path, -1, NULL));
+      run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, local_path, -1, NULL));
 
       strcat(local_path, "\r\n");
       write(local_path, strlen(local_path), fp);
@@ -1153,7 +1153,7 @@ void list(void) {
   init_unapi();
 
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, 80, "GET", "/files/list", "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/list", "CON", -1, NULL));
 }
 
 void installed(void) {
