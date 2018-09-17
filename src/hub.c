@@ -1204,6 +1204,26 @@ void list(void) {
   run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/list", "CON", -1, NULL));
 }
 
+void search(char *search_string) {
+  url parsed_url;
+  char conn = 0;
+  char path[100];
+
+  if (search_string[0] == '\0') {
+    die("Search string not specified.");
+  }
+
+  read_config();
+  init_unapi();
+
+  strcpy(path, "/files/search/");
+  strcat(path, search_string);
+
+  parse_url(baseurl, &parsed_url);
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL));
+}
+
+
 void installed(void) {
   char path[128];
   file_info_block_t fib;
@@ -1232,7 +1252,7 @@ void version() {
 }
 
 void usage() {
-  printf("Usage: hub {install,uninstall,configure,list,installed,help,version}\r\n");
+  printf("Usage: hub {install,uninstall,configure,list,search,installed,help,version}\r\n");
 }
 
 void help(char const *command) {
@@ -1254,6 +1274,9 @@ void help(char const *command) {
   } else if (strcicmp(command, "list") == 0) {
     printf("Usage: hub list\r\n\r\n");
     printf("Show the list of available packages to be installed.\r\n");
+  } else if (strcicmp(command, "search") == 0) {
+    printf("Usage: hub search SEARCH_STRING\r\n\r\n");
+    printf("Search for SEARCH_STRING in the online packages database.\r\n");
   } else if (strcicmp(command, "installed") == 0) {
     printf("Usage: hub installed\r\n\r\n");
     printf("Show the list of currently installed packages.\r\n");
@@ -1306,6 +1329,8 @@ int main(char **argv, int argc) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {
     list();
+  } else if (strcicmp(commands[0], "search") == 0) {
+    search(commands[1]);
   } else if (strcicmp(commands[0], "installed") == 0) {
     installed();
   } else if (strcicmp(commands[0], "help") == 0) {
