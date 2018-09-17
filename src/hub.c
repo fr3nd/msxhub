@@ -1193,6 +1193,17 @@ void configure(void) {
   printf("Done! MSX Hub configured properly.\r\n");
 }
 
+void categories(void) {
+  url parsed_url;
+  char conn = 0;
+
+  read_config();
+  init_unapi();
+
+  parse_url(baseurl, &parsed_url);
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/categories", "CON", -1, NULL));
+}
+
 void list(void) {
   url parsed_url;
   char conn = 0;
@@ -1271,6 +1282,9 @@ void help(char const *command) {
   } else if (strcicmp(command, "configure") == 0) {
     printf("Usage: hub configure\r\n\r\n");
     printf("Configures the application for first time run.\r\n");
+  } else if (strcicmp(command, "categories") == 0) {
+    printf("Usage: hub categories\r\n\r\n");
+    printf("Show the list of software categories.\r\n");
   } else if (strcicmp(command, "list") == 0) {
     printf("Usage: hub list\r\n\r\n");
     printf("Show the list of available packages to be installed.\r\n");
@@ -1329,6 +1343,8 @@ int main(char **argv, int argc) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {
     list();
+  } else if (strcicmp(commands[0], "categories") == 0) {
+    categories();
   } else if (strcicmp(commands[0], "search") == 0) {
     search(commands[1]);
   } else if (strcicmp(commands[0], "installed") == 0) {
