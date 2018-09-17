@@ -547,7 +547,10 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
   run_or_die(http_send(conn, hostname, username, password, port, method, path));
   run_or_die(http_get_headers(conn));
 
-  while (headers_info.is_redirect && n < 10) {
+  while (headers_info.is_redirect) {
+    if (n >= 10) {
+      die("Too many redirects.");
+    }
     n++;
     parse_url(headers_info.location, &parsed_url);
     if (parsed_url.hostname[0] == '\0') { // Relative URL
