@@ -1092,6 +1092,8 @@ void uninstall(char *package) {
         if (c != 0) {
           if (c == 0xD7) { // File does not exist. Continue
             printf("WARNING: File %s does not exist...\r\n", current_file);
+          } else if (c == 0xD0) { // Directory not empty. Continue
+            printf("WARNING: Directory %s not empty. Not deleting.\r\n", current_file);
           } else { // Another error
             printf("Error deleting file %s: 0x%X\r\n", current_file, c);
             explain(buffer, c);
