@@ -1263,7 +1263,17 @@ void version() {
 }
 
 void usage() {
-  printf("Usage: hub {install,uninstall,configure,list,search,installed,help,version}\r\n");
+  printf("Usage: hub <command>\r\n\r\n");
+  printf("Available commands:\r\n");
+  printf("  categories\r\n");
+  printf("  configure\r\n");
+  printf("  help\r\n");
+  printf("  install\r\n");
+  printf("  installed\r\n");
+  printf("  list\r\n");
+  printf("  search\r\n");
+  printf("  uninstall\r\n");
+  printf("  version \r\n");
 }
 
 void help(char const *command) {
