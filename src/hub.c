@@ -423,6 +423,7 @@ char http_get_headers(char *conn) {
       run_or_die(tcp_get(conn, data_buffer));
       data_buffer->current_pos = 0;
       data_buffer->chunk_size = 0;
+      data_buffer->chunked_data_available = 0;
       empty_line = 0;
       do {
         m = 0;
