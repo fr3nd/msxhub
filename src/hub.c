@@ -936,6 +936,33 @@ void print_hex(const char *s) {
   printf("\r\n");
 }
 
+
+char is_installed(char const *package) {
+  char path[128];
+  file_info_block_t fib;
+
+  read_config();
+
+  // XXX Using DosCall because I wasn't able to implement it myself...
+  strcpy(path, configpath);
+  strcat(path, "\\IDB\\");
+  regs.Words.DE = (int)&path;
+  regs.Bytes.B = 0x00;
+  regs.Words.IX = (int)&fib;
+  DosCall(FFIRST, &regs, REGS_ALL, REGS_AF);
+
+  tolower_str(package);
+  while (regs.Bytes.A == 0) {
+    tolower_str(fib.filename);
+    if (strcmp(package, fib.filename) == 0) {
+      return 1;
+    }
+    DosCall(FNEXT, &regs, REGS_ALL, REGS_AF);
+  }
+
+  return 0;
+}
+
 void install(char const *package, char const *installdir_arg) {
   char conn = 0;
   char files[MAX_FILES_SIZE];
@@ -948,10 +975,12 @@ void install(char const *package, char const *installdir_arg) {
   int fp, n;
   char c;
 
-  // TODO Check if package is already installed before reinstall
-
   if (package[0] == '\0') {
     die("Package name not specified.");
+  }
+
+  if (is_installed(package)) {
+    die("Package %s is already installed.", package);
   }
 
   if (installdir_arg[0] != '\0') {
