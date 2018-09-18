@@ -936,7 +936,7 @@ void print_hex(const char *s) {
   printf("\r\n");
 }
 
-void install(char const *package) {
+void install(char const *package, char const *installdir_arg) {
   char conn = 0;
   char files[MAX_FILES_SIZE];
   url parsed_url;
@@ -948,8 +948,16 @@ void install(char const *package) {
   int fp, n;
   char c;
 
+  // TODO Check if package is already installed before reinstall
+
   if (package[0] == '\0') {
     die("Package name not specified.");
+  }
+
+  if (installdir_arg[0] != '\0') {
+    if (installdir_arg[1] != ':' && installdir_arg[2] != '\\') {
+      die("Installdir must be a full path.");
+    }
   }
 
   read_config();
@@ -965,17 +973,22 @@ void install(char const *package) {
   strcat(path, "/latest/files");
   run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
+  if (installdir_arg[0] == '\0') {
+    printf("- Getting installation dir...\r\n");
+    strcpy(path, "/files/");
+    strcat(path, package);
+    strcat(path, "/latest/installdir");
+    run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
+    strcpy(local_path, progsdir);
+    strcat(local_path, installdir);
+    strcpy(installdir, local_path);
+  } else {
+    printf("- Installation dir: %s...\r\n", installdir_arg);
+    strcpy(installdir, installdir_arg);
+  }
 
-  printf("- Getting installation dir...\r\n");
-  strcpy(path, "/files/");
-  strcat(path, package);
-  strcat(path, "/latest/installdir");
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
-
-  strcpy(local_path, progsdir);
-  strcat(local_path, installdir);
-  printf("- Creating destination directory: %s\r\n", local_path);
-  fp = create(local_path, O_RDWR, ATTR_DIRECTORY);
+  printf("- Creating destination directory: %s\r\n", installdir);
+  fp = create(installdir, O_RDWR, ATTR_DIRECTORY);
   if (fp < 0) {
     n = (fp >> 0) & 0xff;
     if (n == DIRX) {
@@ -1011,8 +1024,7 @@ void install(char const *package) {
       strcat(path, "/latest/get/");
       strcat(path, line);
 
-      strcpy(local_path, progsdir);
-      strcat(local_path, installdir);
+      strcpy(local_path, installdir);
       strcat(local_path, "\\");
       strcat(local_path, line);
 
@@ -1028,15 +1040,13 @@ void install(char const *package) {
   }
 
   // Save the destination dir to IDB too
-  strcpy(local_path, progsdir);
-  strcat(local_path, installdir);
+  strcpy(local_path, installdir);
   strcat(local_path, "\r\n");
   write(local_path, strlen(local_path), fp);
 
   close(fp);
 
-  strcpy(local_path, progsdir);
-  strcat(local_path, installdir);
+  strcpy(local_path, installdir);
   printf("- Done! Package %s installed in %s\r\n", package, local_path);
 }
 
@@ -1284,8 +1294,9 @@ void help(char const *command) {
     printf("\r\nMSXHub is a MSX software installer. It can download and install packaged software from the internet directly into your MSX.\r\n");
     printf("An UNAPI compatible network card and a working internet connection is required.\r\n");
   } else if (strcicmp(command, "install") == 0) {
-    printf("Usage: hub install PACKAGE\r\n\r\n");
+    printf("Usage: hub install PACKAGE [INSTALLDIR]\r\n\r\n");
     printf("Installs the specified software package from Internet.\r\n");
+    printf("The optional parameter INSTALLDIR specifies the directory where the package is going to be installed. If left blank, the default one is going to be used.\r\n");
   } else if (strcicmp(command, "uninstall") == 0) {
     printf("Usage: hub uninstall PACKAGE\r\n\r\n");
     printf("Uninstalls the specified packaged application from your MSX.\r\n");
@@ -1346,7 +1357,7 @@ int main(char **argv, int argc) {
   }
 
   if (strcicmp(commands[0], "install") == 0) {
-    install(commands[1]);
+    install(commands[1], commands[2]);
   } else if (strcicmp(commands[0], "uninstall") == 0) {
     uninstall(commands[1]);
   } else if (strcicmp(commands[0], "configure") == 0) {
