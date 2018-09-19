@@ -941,26 +941,20 @@ char is_installed(char const *package) {
   char path[128];
   file_info_block_t fib;
 
-  read_config();
-
   // XXX Using DosCall because I wasn't able to implement it myself...
   strcpy(path, configpath);
   strcat(path, "\\IDB\\");
+  strcat(path, package);
   regs.Words.DE = (int)&path;
   regs.Bytes.B = 0x00;
   regs.Words.IX = (int)&fib;
   DosCall(FFIRST, &regs, REGS_ALL, REGS_AF);
 
-  tolower_str(package);
-  while (regs.Bytes.A == 0) {
-    tolower_str(fib.filename);
-    if (strcmp(package, fib.filename) == 0) {
-      return 1;
-    }
-    DosCall(FNEXT, &regs, REGS_ALL, REGS_AF);
+  if (regs.Bytes.A == 0) {
+    return 1;
+  } else {
+    return 0;
   }
-
-  return 0;
 }
 
 void install(char const *package, char const *installdir_arg) {
