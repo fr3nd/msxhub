@@ -299,7 +299,7 @@ char tcp_close(char *conn) {
   if(conn != 0) {
     regs.Bytes.B = *conn;
     UnapiCall(code_block, TCPIP_TCP_CLOSE, &regs, REGS_MAIN, REGS_NONE);
-    conn = 0;
+    *conn = 0;
   }
   // TODO Handle errors
   return ERR_OK;
