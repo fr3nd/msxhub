@@ -549,6 +549,7 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
   run_or_die(http_get_headers(conn));
 
   while (headers_info.is_redirect) {
+    tcp_close(conn);
     if (n >= 10) {
       die("Too many redirects.");
     }
