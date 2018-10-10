@@ -1043,6 +1043,25 @@ void install(char const *package, char const *installdir_arg) {
 
     if (strlen(line) > 0 ) {
       remove_char(line, '\r');
+
+      // Create subdirectories if required
+      for (n=0; line[n] == '\0'; n++) {
+        if (line[n] == '\\') {
+          strcpy(path, line);
+          path[n] = '\0';
+
+          fp = create(path, O_RDWR, ATTR_DIRECTORY);
+          if (fp < 0) {
+            n = (fp >> 0) & 0xff;
+            if (n != DIRX) {
+              printf("Error creating destination directory. 0x%X\r\n", n);
+              explain(path, n); // Variable path is no longer going to be used. Reusing it as buffer
+              die("%s", path);
+            }
+          }
+        }
+      }
+
       strcpy(path, "/files/");
       strcat(path, package);
       strcat(path, "/latest/get/");
