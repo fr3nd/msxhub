@@ -348,9 +348,9 @@ void init_unapi(void) {
   // FIXME Not sure why it doesn't work with malloc...
   //code_block = malloc(sizeof(unapi_code_block));
   //parameters = malloc(sizeof(unapi_connection_parameters));
-  code_block = (unapi_code_block*)0x8200;
-  parameters = (unapi_connection_parameters*)0x8300;
-  data_buffer = (data_buffer_t*)0x8400;
+  code_block = (unapi_code_block*)0xA200;
+  parameters = (unapi_connection_parameters*)0xA300;
+  data_buffer = (data_buffer_t*)0xA400;
 
   err_code = UnapiGetCount("TCP/IP");
   if(err_code == 0) {
@@ -964,10 +964,11 @@ void install(char const *package, char const *installdir_arg) {
   url parsed_url;
   char path[MAX_URLPATH_SIZE];
   char local_path[MAX_PATH_SIZE];
+  char created_dirs[MAX_PATH_SIZE*16];
   char installdir[128];
   char *line;
   char *next_line;
-  int fp, n;
+  int fp, fp2, n, i;
   char c;
 
   if (package[0] == '\0') {
@@ -1035,6 +1036,8 @@ void install(char const *package, char const *installdir_arg) {
   strcat(local_path, package);
   fp = create(local_path, O_RDWR, 0x00);
   line = files;
+
+  created_dirs[0] = '\0';
   // Iterate trough all files
   // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
   while (line) {
@@ -1045,35 +1048,62 @@ void install(char const *package, char const *installdir_arg) {
       remove_char(line, '\r');
 
       // Create subdirectories if required
-      for (n=0; line[n] == '\0'; n++) {
-        if (line[n] == '\\') {
-          strcpy(path, line);
-          path[n] = '\0';
+      for (i=0; line[i] != '\0'; i++) {
+        if (line[i] == '\\') {
+          strcpy(path, installdir);
+          strcat(path, "\\");
+          c = line[i];
+          line[i] = '\0';
+          strcat(path, line);
+          line[i] = c;
+          debug("Creating directory %s", path);
 
-          fp = create(path, O_RDWR, ATTR_DIRECTORY);
-          if (fp < 0) {
-            n = (fp >> 0) & 0xff;
+          fp2 = create(path, O_RDWR, ATTR_DIRECTORY);
+          if (fp2 < 0) {
+            n = (fp2 >> 0) & 0xff;
             if (n != DIRX) {
               printf("Error creating destination directory. 0x%X\r\n", n);
               explain(path, n); // Variable path is no longer going to be used. Reusing it as buffer
               die("%s", path);
             }
+          } else {
+            if (strstr(created_dirs, path) == '\0') {
+              strcat(path, "\n");
+              strcat(created_dirs, path);
+            }
           }
         }
       }
-
-      strcpy(path, "/files/");
-      strcat(path, package);
-      strcat(path, "/latest/get/");
-      strcat(path, line);
 
       strcpy(local_path, installdir);
       strcat(local_path, "\\");
       strcat(local_path, line);
 
+      line = replace_char(line, '\\', '/');
+      strcpy(path, "/files/");
+      strcat(path, package);
+      strcat(path, "/latest/get/");
+      strcat(path, line);
+
       debug("Downloading %s %s to %s\r\n", parsed_url.hostname, path, local_path);
       run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, local_path, -1, NULL));
 
+      strcat(local_path, "\r\n");
+      write(local_path, strlen(local_path), fp);
+    }
+
+    if (next_line) *next_line = '\n'; // then restore newline-char, just to be tidy
+    line = next_line ? (next_line+1) : NULL;
+  }
+
+  // After the files, store created directories in IDB
+  line = created_dirs;
+  while (line) {
+    next_line = strchr(line, '\n');
+    if (next_line) *next_line = '\0'; // temporarily terminate the current line
+
+    if (strlen(line) > 0 ) {
+      strcpy(local_path, line);
       strcat(local_path, "\r\n");
       write(local_path, strlen(local_path), fp);
     }

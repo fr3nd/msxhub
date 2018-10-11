@@ -50,3 +50,13 @@ void remove_char(char *str, char c) {
   }
   *dst = '\0';
 }
+
+// https://stackoverflow.com/questions/32496497/standard-function-to-replace-character-or-substring-in-a-char-array
+char* replace_char(char* str, char find, char replace){
+  char *current_pos = strchr(str,find);
+  while (current_pos){
+    *current_pos = replace;
+    current_pos = strchr(current_pos,find);
+  }
+  return str;
+}
