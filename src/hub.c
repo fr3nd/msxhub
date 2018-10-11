@@ -1097,6 +1097,7 @@ void install(char const *package, char const *installdir_arg) {
   }
 
   // After the files, store created directories in IDB
+  // TODO iterate in reverse order to allow subdirectories
   line = created_dirs;
   while (line) {
     next_line = strchr(line, '\n');
