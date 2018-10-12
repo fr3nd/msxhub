@@ -1388,6 +1388,7 @@ void usage() {
   printf("  categories\r\n");
   printf("  configure\r\n");
   printf("  help\r\n");
+  printf("  info\r\n");
   printf("  install\r\n");
   printf("  installed\r\n");
   printf("  list\r\n");
