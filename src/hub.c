@@ -961,6 +961,7 @@ char is_installed(char const *package) {
 void install(char const *package, char const *installdir_arg) {
   char conn = 0;
   char files[MAX_FILES_SIZE];
+  char version[16];
   url parsed_url;
   char path[MAX_URLPATH_SIZE];
   char local_path[MAX_PATH_SIZE];
@@ -973,6 +974,14 @@ void install(char const *package, char const *installdir_arg) {
 
   if (package[0] == '\0') {
     die("Package name not specified.");
+  }
+
+  line = strchr(package, ':');
+  if (line == '\0') {
+    strcpy(version, "latest");
+  } else {
+    *line = '\0';
+    strcpy(version, ++line);
   }
 
   if (is_installed(package)) {
@@ -990,19 +999,23 @@ void install(char const *package, char const *installdir_arg) {
 
   toupper_str(package);
 
-  printf("- Getting list of files for package %s...\r\n", package);
+  printf("- Getting list of files for package %s:%s...\r\n", package, version);
   parse_url(baseurl, &parsed_url);
 
   strcpy(path, "/files/");
   strcat(path, package);
-  strcat(path, "/latest/files");
+  strcat(path, "/");
+  strcat(path, version);
+  strcat(path, "/files");
   run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
   if (installdir_arg[0] == '\0') {
     printf("- Getting installation dir...\r\n");
     strcpy(path, "/files/");
     strcat(path, package);
-    strcat(path, "/latest/installdir");
+    strcat(path, "/");
+    strcat(path, version);
+    strcat(path, "/installdir");
     run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
     strcpy(local_path, progsdir);
     strcat(local_path, installdir);
@@ -1082,7 +1095,9 @@ void install(char const *package, char const *installdir_arg) {
       line = replace_char(line, '\\', '/');
       strcpy(path, "/files/");
       strcat(path, package);
-      strcat(path, "/latest/get/");
+      strcat(path, "/");
+      strcat(path, version);
+      strcat(path, "/get/");
       strcat(path, line);
 
       debug("Downloading %s %s to %s\r\n", parsed_url.hostname, path, local_path);
@@ -1375,9 +1390,10 @@ void help(char const *command) {
     printf("An UNAPI compatible network card and a working internet connection is required.\r\n");
 
   } else if (strcicmp(command, "install") == 0) {
-    printf("Usage: hub install PACKAGE [INSTALLDIR]\r\n\r\n");
-    printf("Install the specified software package from Internet.\r\n");
-    printf("The optional parameter INSTALLDIR specifies the directory where the package is going to be installed. If left blank, the default one is going to be used.\r\n");
+    printf("Usage: hub install PACKAGE[:VERSION] [INSTALLDIR]\r\n\r\n");
+    printf("Install the specified software package from Internet.\r\n\r\n");
+    printf("The optional parameter INSTALLDIR specifies the directory where the package is going to be installed. If left blank, the default one is going to be used.\r\n\r\n");
+    printf("It's possible to specify the version to be installed appending :VERSION to the package name. By default \"latest\" is ging to be installed.\r\n");
 
   } else if (strcicmp(command, "uninstall") == 0) {
     printf("Usage: hub uninstall PACKAGE\r\n\r\n");
