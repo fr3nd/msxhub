@@ -1319,6 +1319,22 @@ void list(void) {
   run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/list", "CON", -1, NULL));
 }
 
+void info(char *package) {
+  url parsed_url;
+  char conn = 0;
+  char path[MAX_URLPATH_SIZE];
+
+  read_config();
+  init_unapi();
+
+  strcpy(path, "/files/");
+  strcat(path, package);
+  strcat(path, "/info");
+
+  parse_url(baseurl, &parsed_url);
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL));
+}
+
 void search(char *search_string) {
   url parsed_url;
   char conn = 0;
@@ -1399,9 +1415,14 @@ void help(char const *command) {
     printf("Usage: hub uninstall PACKAGE\r\n\r\n");
     printf("Uninstall the specified packaged application from your MSX.\r\n");
 
+  } else if (strcicmp(command, "info") == 0) {
+    printf("Usage: hub info PACKAGE\r\n\r\n");
+    printf("Get info for the specified package.\r\n");
+
   } else if (strcicmp(command, "upgrade") == 0) {
     printf("Usage: hub upgrade PACKAGE\r\n\r\n");
-    printf("Upgrade specified package to the latest version.\r\n");
+    printf("Upgrade specified package to the latest version.\r\n\r\n");
+    printf("Note: upgrade actually uninstalls the currently installed package and installs the latest one\r\n");
 
   } else if (strcicmp(command, "configure") == 0) {
     printf("Usage: hub configure\r\n\r\n");
@@ -1475,6 +1496,8 @@ int main(char **argv, int argc) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {
     list();
+  } else if (strcicmp(commands[0], "info") == 0) {
+    info(commands[1]);
   } else if (strcicmp(commands[0], "categories") == 0) {
     categories();
   } else if (strcicmp(commands[0], "search") == 0) {
