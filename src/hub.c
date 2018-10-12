@@ -1308,15 +1308,22 @@ void categories(void) {
   run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/categories", "CON", -1, NULL));
 }
 
-void list(void) {
+void list(char *category) {
   url parsed_url;
   char conn = 0;
+  char path[MAX_URLPATH_SIZE];
 
   read_config();
   init_unapi();
 
+  strcpy(path, "/files/list");
+  if (category[0] != '\0') {
+    strcat(path, "?category=");
+    strcat(path, category);
+  }
+
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/list", "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL));
 }
 
 void info(char *package) {
@@ -1434,8 +1441,9 @@ void help(char const *command) {
     printf("Show the list of software categories.\r\n");
 
   } else if (strcicmp(command, "list") == 0) {
-    printf("Usage: hub list\r\n\r\n");
-    printf("Show the list of available packages to be installed.\r\n");
+    printf("Usage: hub list [CATEGORY]\r\n\r\n");
+    printf("Show the list of available packages to be installed.\r\n\r\n");
+    printf("If a category name is passed as second parameter, only packages from the specified category will be listed.");
 
   } else if (strcicmp(command, "search") == 0) {
     printf("Usage: hub search SEARCH_STRING\r\n\r\n");
@@ -1496,7 +1504,7 @@ int main(char **argv, int argc) {
   } else if (strcicmp(commands[0], "configure") == 0) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {
-    list();
+    list(commands[1]);
   } else if (strcicmp(commands[0], "info") == 0) {
     info(commands[1]);
   } else if (strcicmp(commands[0], "categories") == 0) {
