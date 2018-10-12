@@ -1140,7 +1140,7 @@ void uninstall(char *package) {
 
   toupper_str(package);
 
-  printf("Uninstalling package %s...\r\n", package);
+  printf("- Uninstalling package %s...\r\n", package);
 
   strcpy(buffer, configpath);
   strcat(buffer, "\\IDB\\");
@@ -1204,6 +1204,11 @@ void uninstall(char *package) {
     explain(buffer, c);
     die("%s", buffer);
   }
+}
+
+void upgrade(char *package) {
+  uninstall(package);
+  install(package, "");
 }
 
 void configure(void) {
@@ -1357,6 +1362,7 @@ void usage() {
   printf("  list\r\n");
   printf("  search\r\n");
   printf("  uninstall\r\n");
+  printf("  upgrade\r\n");
   printf("  version \r\n");
 }
 
@@ -1367,33 +1373,46 @@ void help(char const *command) {
     printf("\r\nUse 'hub help COMMAND' for info about a specific command.\r\n");
     printf("\r\nMSXHub is a MSX software installer. It can download and install packaged software from the internet directly into your MSX.\r\n");
     printf("An UNAPI compatible network card and a working internet connection is required.\r\n");
+
   } else if (strcicmp(command, "install") == 0) {
     printf("Usage: hub install PACKAGE [INSTALLDIR]\r\n\r\n");
-    printf("Installs the specified software package from Internet.\r\n");
+    printf("Install the specified software package from Internet.\r\n");
     printf("The optional parameter INSTALLDIR specifies the directory where the package is going to be installed. If left blank, the default one is going to be used.\r\n");
+
   } else if (strcicmp(command, "uninstall") == 0) {
     printf("Usage: hub uninstall PACKAGE\r\n\r\n");
-    printf("Uninstalls the specified packaged application from your MSX.\r\n");
+    printf("Uninstall the specified packaged application from your MSX.\r\n");
+
+  } else if (strcicmp(command, "upgrade") == 0) {
+    printf("Usage: hub upgrade PACKAGE\r\n\r\n");
+    printf("Upgrade specified package to the latest version.\r\n");
+
   } else if (strcicmp(command, "configure") == 0) {
     printf("Usage: hub configure\r\n\r\n");
-    printf("Configures the application for first time run.\r\n");
+    printf("Configure the application for first time run.\r\n");
+
   } else if (strcicmp(command, "categories") == 0) {
     printf("Usage: hub categories\r\n\r\n");
     printf("Show the list of software categories.\r\n");
+
   } else if (strcicmp(command, "list") == 0) {
     printf("Usage: hub list\r\n\r\n");
     printf("Show the list of available packages to be installed.\r\n");
+
   } else if (strcicmp(command, "search") == 0) {
     printf("Usage: hub search SEARCH_STRING\r\n\r\n");
     printf("Search for SEARCH_STRING in the online packages database.\r\n");
+
   } else if (strcicmp(command, "installed") == 0) {
     printf("Usage: hub installed\r\n\r\n");
     printf("Show the list of currently installed packages.\r\n");
+
   } else if (strcicmp(command, "help") == 0) {
     printf("Usage: hub help COMMAND\r\n\r\n");
     printf("Show help about the specified command.");
+
   } else if (strcicmp(command, "version") == 0) {
-    printf("Shows current version: ");
+    printf("Show current version: ");
     version();
   }
 }
@@ -1434,6 +1453,8 @@ int main(char **argv, int argc) {
     install(commands[1], commands[2]);
   } else if (strcicmp(commands[0], "uninstall") == 0) {
     uninstall(commands[1]);
+  } else if (strcicmp(commands[0], "upgrade") == 0) {
+    upgrade(commands[1]);
   } else if (strcicmp(commands[0], "configure") == 0) {
     configure();
   } else if (strcicmp(commands[0], "list") == 0) {
