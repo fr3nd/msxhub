@@ -998,7 +998,7 @@ void install(char const *package, char const *installdir_arg) {
   printf("- Getting list of files for package %s:%s...\r\n", package, version);
   parse_url(baseurl, &parsed_url);
 
-  strcpy(path, "/files/");
+  strcpy(path, "/api/");
   strcat(path, package);
   strcat(path, "/");
   strcat(path, version);
@@ -1007,7 +1007,7 @@ void install(char const *package, char const *installdir_arg) {
 
   if (installdir_arg[0] == '\0') {
     printf("- Getting installation dir...\r\n");
-    strcpy(path, "/files/");
+    strcpy(path, "/api/");
     strcat(path, package);
     strcat(path, "/");
     strcat(path, version);
@@ -1089,7 +1089,7 @@ void install(char const *package, char const *installdir_arg) {
       strcat(local_path, line);
 
       line = replace_char(line, '\\', '/');
-      strcpy(path, "/files/");
+      strcpy(path, "/api/");
       strcat(path, package);
       strcat(path, "/");
       strcat(path, version);
@@ -1288,7 +1288,7 @@ void configure(void) {
   printf("- Programs are going to be installed in %s\r\n", progsdir);
   save_config("PROGSDIR", progsdir);
 
-  save_config("BASEURL", "http://msxhub.com/files/");
+  save_config("BASEURL", "http://api.msxhub.com/api/");
 
   printf("Done! MSX Hub configured properly.\r\n");
 }
@@ -1301,7 +1301,7 @@ void categories(void) {
   init_unapi();
 
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/files/categories", "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/api/categories", "CON", -1, NULL));
 }
 
 void list(char *category) {
@@ -1312,7 +1312,7 @@ void list(char *category) {
   read_config();
   init_unapi();
 
-  strcpy(path, "/files/list");
+  strcpy(path, "/api/list");
   if (category[0] != '\0') {
     strcat(path, "?category=");
     strcat(path, category);
@@ -1330,7 +1330,7 @@ void info(char *package) {
   read_config();
   init_unapi();
 
-  strcpy(path, "/files/");
+  strcpy(path, "/api/");
   strcat(path, package);
   strcat(path, "/info");
 
@@ -1350,7 +1350,7 @@ void search(char *search_string) {
   read_config();
   init_unapi();
 
-  strcpy(path, "/files/search/");
+  strcpy(path, "/api/search/");
   strcat(path, search_string);
 
   parse_url(baseurl, &parsed_url);
