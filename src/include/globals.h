@@ -87,7 +87,7 @@
 #define MAX_PATH_SIZE (64)
 #define MAX_URL_SIZE (256)
 
-#define MAX_FILES_SIZE (1024)
+#define MAX_FILES_SIZE (1408)
 #define TCPOUT_STEP_SIZE (512)
 #define TICKS_TO_WAIT (20*60)
 #define SYSTIMER ((uint*)0xFC9E)
