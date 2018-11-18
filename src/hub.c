@@ -1094,6 +1094,8 @@ void install(char const *package, char const *installdir_arg) {
       strcat(path, "/");
       strcat(path, version);
       strcat(path, "/get/");
+      strcat(path, package);
+      strcat(path, "/");
       strcat(path, line);
 
       debug("Downloading %s %s to %s\r\n", parsed_url.hostname, path, local_path);
