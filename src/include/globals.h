@@ -9,7 +9,7 @@
 
 #include "asm.h"
 
-#define MSXHUB_VERSION "1.0.0rc1"
+#define MSXHUB_VERSION "1.0.0"
 
 /* DOS errors */
 #define NOFIL   0xD7
