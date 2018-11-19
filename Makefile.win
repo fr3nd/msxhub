@@ -1,0 +1,30 @@
+.PHONY: clean test emulator
+DOCKER = docker run -it --rm -v "%cd%":/usr/src fr3nd/msxhub-packages:4
+
+SHELL=cmd
+
+ALL = $(subst .yaml,,$(subst packages/,,$(wildcard packages/*.yaml)))
+ALL_ZIP = $(subst .yaml,.zip,$(subst packages/,,$(wildcard packages/*.yaml)))
+
+all:
+	@echo "Please, specify one package to build:"
+	@echo $(ALL)
+
+%:
+	$(DOCKER) pytest-3 -k packages/$(@).yaml
+	$(DOCKER) build packages/$(@).yaml files
+	xcopy files dsk\files /s /q /y /i
+	rmdir package /s /q
+test:
+	$(DOCKER) pytest-3 -v
+
+emulator:
+	openmsx -machine "Boosted_MSXturboR_with_IDE" -ext msxdos2 -script emulation/boot.tcl
+
+clean:
+	rmdir files /s /q
+	rmdir dsk\files /s /q
+	del DSK.dsk /q
+
+# vim:ft=make
+#
