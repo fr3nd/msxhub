@@ -832,6 +832,7 @@ const char* get_config(char* filename) {
   // Env variables take precedence over config files
   get_env(filename, buffer, sizeof(buffer));
   if (buffer[0] != '\0') {
+    debug("Read config from variable: %s = %s", filename, buffer);
     return buffer;
   }
 
@@ -852,7 +853,7 @@ const char* get_config(char* filename) {
   n = read(buffer, sizeof(buffer), fp);
   close(fp);
   buffer[n-1] = '\0';
-  debug("Read config: %s = %s", filename, buffer);
+  debug("Read config from file: %s = %s", filename, buffer);
   return buffer;
 }
 
