@@ -441,6 +441,8 @@ char http_get_headers(char *conn) {
             parse_response(header);
             if (headers_info.status_code == 404) {
               die("Not found.");
+            } else if (headers_info.status_code == 426) {
+              die("Please upgrade MSXHub to the latest version to continue.");
             } else if (headers_info.status_code >= 300 && headers_info.status_code < 400) {
               headers_info.is_redirect = 1;
             } else if (headers_info.status_code != 200) {
