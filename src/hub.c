@@ -598,7 +598,7 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
       if (fp > 4) { // It's a regular file
         bytes_written += n;
         printf("\r%-12s ", file_name);
-        progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "K");
+        progress_bar(bytes_written / 1024, headers_info.content_length / 1024, progress_bar_size, "K");
       }
       write(buffer, n, fp);
     } else { // Store result to string
@@ -643,7 +643,7 @@ void progress_bar(unsigned long current, unsigned long total, char size, char *u
       putchar(' ');
     }
   }
-  printf("] %lu%s", current, unit);
+  printf("] %2lu%s", current, unit);
   if (headers_info.is_chunked != 1) {
     printf("/%lu%s", total, unit);
   }
