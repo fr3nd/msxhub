@@ -107,10 +107,10 @@ int create(char *fn, char mode, char attributes) __naked {
     DOSCALL
 
     cp #0
-    jr z, open_noerror$
+    jr z, create_noerror$
     ld h, #0xff
     ld l, a
-    jp open_error$
+    jp create_error$
   create_noerror$:
     ld h, #0x00
     ld l, b
