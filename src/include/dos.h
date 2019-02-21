@@ -19,6 +19,7 @@
 #define WRITE   #0x49
 #define IOCTL   #0x4B
 #define DELETE  #0x4D
+#define GETCD   #0x59
 #define PARSE   #0x5B
 #define TERM    #0x62
 #define EXPLAIN #0x66
@@ -44,5 +45,6 @@ char dosver(void);
 void explain(char* buffer, char error_code);
 char get_env(char* name, char* buffer, char buffer_size);
 char delete_file(char *file);
+char get_current_directory(char drive_number, char* current_directory);
 
 #endif

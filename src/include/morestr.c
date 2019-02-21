@@ -60,3 +60,8 @@ char* replace_char(char* str, char find, char replace){
   }
   return str;
 }
+
+char* basename (const char *filename) {
+  char *p = strrchr (filename, '/');
+  return p ? p + 1 : (char *) filename;
+}

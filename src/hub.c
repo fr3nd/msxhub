@@ -1405,6 +1405,33 @@ void installed(void) {
 
 }
 
+void get(char const *urlstring, char const *destination) {
+  url parsed_url;
+  char conn = 0;
+  char current_dir[64];
+  char path[64] = {'\0'};
+
+  read_config();
+  init_unapi();
+
+  parse_url(urlstring, &parsed_url);
+
+
+  if (destination[0] != '\0') {
+    strcpy(path, destination);
+  } else {
+    // Store the downloaded file in the current directory
+    run_or_die(get_current_directory(0, current_dir));
+    path[0] = 'A' + get_current_drive();
+    strcat(path, ":\\");
+    strcat(path, current_dir);
+    strcat(path, "\\");
+    strcat(path, basename(parsed_url.path));
+  }
+
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", parsed_url.path, path, -1, NULL));
+}
+
 void version() {
   printf("MSXHub version %s\r\n", MSXHUB_VERSION);
 }
@@ -1414,6 +1441,7 @@ void usage() {
   printf("Available commands:\r\n");
   printf("  categories\r\n");
   printf("  configure\r\n");
+  printf("  get\r\n");
   printf("  help\r\n");
   printf("  info\r\n");
   printf("  install\r\n");
@@ -1427,6 +1455,7 @@ void usage() {
 
 void help(char const *command) {
   version();
+  printf("\r\n");
   if (command[0] == '\0') {
     usage();
     printf("\r\nUse 'hub help COMMAND' for info about a specific command.\r\n");
@@ -1473,6 +1502,12 @@ void help(char const *command) {
     printf("Usage: hub installed\r\n\r\n");
     printf("Show the list of currently installed packages.\r\n");
 
+  } else if (strcicmp(command, "get") == 0) {
+    printf("Usage: hub get URL [DEST]\r\n\r\n");
+    printf("Download a file from an URL.\r\n\r\n");
+    printf("By defaul the file will be saved in the current directory.\r\n\r\n");
+    printf("If DEST is specified it can be the destination path (example: A:\\file.txt) or CON to print the file on the screen.\r\n");
+
   } else if (strcicmp(command, "help") == 0) {
     printf("Usage: hub help COMMAND\r\n\r\n");
     printf("Show help about the specified command.");
@@ -1490,7 +1525,9 @@ void help(char const *command) {
 int main(char **argv, int argc) {
 
   int i, n;
-  char commands[3][20] = {{'\0'}, {'\0'}, {'\0'}};
+  char command0[16] = {'\0'};
+  char command1[128] = {'\0'};
+  char command2[64] = {'\0'};
 
   init();
 
@@ -1510,32 +1547,46 @@ int main(char **argv, int argc) {
           break;
       }
     } else {
-      strcpy(commands[n], argv[i]);
+      switch (n) {
+        case 0:
+          strcpy(command0, argv[i]);
+          break;
+        case 1:
+          strcpy(command1, argv[i]);
+          break;
+        case 2:
+          strcpy(command2, argv[i]);
+          break;
+        default:
+          break;
+      }
       n++;
     }
   }
 
-  if (strcicmp(commands[0], "install") == 0) {
-    install(commands[1], commands[2]);
-  } else if (strcicmp(commands[0], "uninstall") == 0) {
-    uninstall(commands[1]);
-  } else if (strcicmp(commands[0], "upgrade") == 0) {
-    upgrade(commands[1]);
-  } else if (strcicmp(commands[0], "configure") == 0) {
+  if (strcicmp(command0, "install") == 0) {
+    install(command1, command2);
+  } else if (strcicmp(command0, "uninstall") == 0) {
+    uninstall(command1);
+  } else if (strcicmp(command0, "upgrade") == 0) {
+    upgrade(command1);
+  } else if (strcicmp(command0, "configure") == 0) {
     configure();
-  } else if (strcicmp(commands[0], "list") == 0) {
-    list(commands[1]);
-  } else if (strcicmp(commands[0], "info") == 0) {
-    info(commands[1]);
-  } else if (strcicmp(commands[0], "categories") == 0) {
+  } else if (strcicmp(command0, "list") == 0) {
+    list(command1);
+  } else if (strcicmp(command0, "info") == 0) {
+    info(command1);
+  } else if (strcicmp(command0, "categories") == 0) {
     categories();
-  } else if (strcicmp(commands[0], "search") == 0) {
-    search(commands[1]);
-  } else if (strcicmp(commands[0], "installed") == 0) {
+  } else if (strcicmp(command0, "search") == 0) {
+    search(command1);
+  } else if (strcicmp(command0, "installed") == 0) {
     installed();
-  } else if (strcicmp(commands[0], "help") == 0) {
-    help(commands[1]);
-  } else if (strcicmp(commands[0], "version") == 0) {
+  } else if (strcicmp(command0, "get") == 0) {
+    get(command1, command2);
+  } else if (strcicmp(command0, "help") == 0) {
+    help(command1);
+  } else if (strcicmp(command0, "version") == 0) {
     version();
   } else {
     help("");

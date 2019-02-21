@@ -317,3 +317,26 @@ char delete_file(char *file) __naked {
     ret
   __endasm;
 }
+
+char get_current_directory(char drive_number, char* current_directory) __naked {
+  drive_number;
+  current_directory;
+  __asm
+    push ix
+    ld ix,#4
+    add ix,sp
+
+    ld b,0(ix)
+    ld e,1(ix)
+    ld d,2(ix)
+
+    ld c, GETCD
+    DOSCALL
+
+    ld h, #0x00
+    ld l, a
+
+    pop ix
+    ret
+  __endasm;
+}
