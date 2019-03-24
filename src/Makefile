@@ -2,7 +2,7 @@
 
 PROGRAM = hub.com
 
-DOCKER_IMAGE = fr3nd/sdcc:3.7.0-2
+DOCKER_IMAGE = fr3nd/sdcc:3.8.0-1
 AS = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} sdasz80
 CC = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} sdcc
 HEX2BIN = docker run -it --rm -v $$(pwd):/usr/src -u $$(id -u):$$(id -g) ${DOCKER_IMAGE} hex2bin
