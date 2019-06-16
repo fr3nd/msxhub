@@ -1254,8 +1254,8 @@ void configure(void) {
 
   // TODO configure autoexec.bat
 
-  printf("Welcome to MSX Hub!\r\n\n");
-  printf("It looks like it's the first time you run MSX Hub. It's going to be automatically configured.\r\n\n");
+  printf("Welcome to MSXHub!\r\n\n");
+  printf("It looks like it's the first time you run MSXHub. It's going to be automatically configured.\r\n\n");
 
   printf("- Main directory: %s\r\n", hubpath);
 
@@ -1314,7 +1314,7 @@ void configure(void) {
 
   save_config("BASEURL", "http://api.msxhub.com/api/");
 
-  printf("Done! MSX Hub configured properly.\r\n");
+  printf("Done! MSXHub configured properly.\r\n");
 }
 
 void categories(void) {
