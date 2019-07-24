@@ -11,7 +11,8 @@
 
 /*** prototypes {{{ ***/
 void die(const char *s, ...);
-void progress_bar(unsigned long current, unsigned long total, char size, char *unit);
+void init_progress_bar(unsigned long total, char size, char *filename, char *unit);
+void progress_bar(unsigned long received, char size);
 void debug(const char *s, ...);
 void debug_nocrlf(const char *s, ...);
 void trim(char * s);
@@ -169,16 +170,17 @@ char tcp_connect(char *conn, char *hostname, unsigned int port) {
   n = 0;
   do {
     abort_if_esc_is_pressed();
-    sys_timer_hold = *SYSTIMER;
-    TCP_WAIT();
-    while(*SYSTIMER == sys_timer_hold);
-    n++;
-    if(n >= TICKS_TO_WAIT) {
-      return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
-    }
-    regs.Bytes.B = *conn;
-    regs.Words.HL = 0;
-    UnapiCall(code_block, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
+	sys_timer_hold = *SYSTIMER;
+	TCP_WAIT();
+
+	while(*SYSTIMER == sys_timer_hold);
+	n++;
+	if(n >= TICKS_TO_WAIT) {
+	  return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
+	}
+	regs.Bytes.B = *conn;
+	regs.Words.HL = 0;
+	UnapiCall(code_block, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
   } while((regs.Bytes.A) == 0 && (regs.Bytes.B != 4));
 
   if(regs.Bytes.A != 0) {
@@ -269,13 +271,16 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
   data_buffer->no_more_data = 0;
   data_buffer->data[0] = '\n';
 
+  sys_timer_hold = *SYSTIMER;
   while(1) {
     abort_if_esc_is_pressed();
-    sys_timer_hold = *SYSTIMER;
     TCP_WAIT();
-    while(*SYSTIMER == sys_timer_hold);
-    n++;
-    if(n >= TICKS_TO_WAIT) {
+    if(*SYSTIMER != sys_timer_hold)
+    {
+      n++;
+      sys_timer_hold = *SYSTIMER;
+    }
+    if(n >= TICKS_TO_WAIT){
       return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
     }
     regs.Bytes.B = *conn;
@@ -537,6 +542,7 @@ char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
 char http_get_content(char *conn, char *hostname, char *username, char *password, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data) {
   int fp;
   int n = 0;
+  int sys_timer_hold;
   char buffer[TCP_BUFFER_SIZE];
   unsigned long bytes_written = 0;
   char progress_bar_size = 0;
@@ -581,43 +587,83 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
     printf("\33x5"); // Disable cursor
     progress_bar_size = get_screen_size() - 24 - 12;
     file_name = (unsigned char*)parse_pathname(0, pathfilename);
+    if (headers_info.content_length > 1024)
+      init_progress_bar(headers_info.content_length, progress_bar_size, file_name, "K ");
+    else
+      init_progress_bar(headers_info.content_length, progress_bar_size, file_name, "B ");
   }
 
 
   // Get data loop
   n = 0;
-  while (data_buffer->no_more_data == 0 && n != maxdata) {
-    if (fp < 128) { // Store result to file
-      while (n < TCP_BUFFER_SIZE && data_buffer->no_more_data == 0) {
-        buffer[n] = http_get_databyte(conn, data_buffer);
+  if ((fp > 4) && (fp <128) && (headers_info.is_chunked == 0)){    
+    if (data_buffer->current_pos < data_buffer->size){			  
+      n = data_buffer->size - data_buffer->current_pos;
+      write(&data_buffer->data[data_buffer->current_pos], n, fp);
+      bytes_written += n;		  
+      progress_bar(n, progress_bar_size);
+    }
+    sys_timer_hold = *SYSTIMER;
+    while(bytes_written < headers_info.content_length) {
+      abort_if_esc_is_pressed();
+      TCP_WAIT();
+      if(*SYSTIMER != sys_timer_hold) {
         n++;
+        sys_timer_hold = *SYSTIMER;
       }
-      if (data_buffer->no_more_data == 1) {
-        n--; // decrease 1 to avoid copyying the null char
-      };
-      if (fp > 4) { // It's a regular file
-        bytes_written += n;
-        printf("\r%-12s ", file_name);
-        if (headers_info.content_length > 1024) {
-          progress_bar(bytes_written / 1024, headers_info.content_length / 1024, progress_bar_size, "K");
-        } else {
-          progress_bar(bytes_written, headers_info.content_length, progress_bar_size, "B");
+      if(n >= TICKS_TO_WAIT) {
+        die(unapi_strerror(ERR_CUSTOM + ERR_CUSTOM_TIMEOUT));
+      }
+      regs.Bytes.B = *conn;
+      regs.Words.DE = (int)data_buffer->data;
+      regs.Words.HL = TCP_BUFFER_SIZE;
+      UnapiCall(code_block, TCPIP_TCP_RCV, &regs, REGS_MAIN, REGS_MAIN);
+      if(regs.Bytes.A != 0) {
+        die(unapi_strerror(regs.Bytes.A));
+      } else {
+        if (regs.UWords.BC != 0) {
+          n = 0;
+          // TODO Implement urgent data
+          debug("tcp_get: received %i bytes", regs.UWords.BC);
+          write(data_buffer->data, regs.UWords.BC, fp);
+          bytes_written += regs.UWords.BC;		  
+          progress_bar(regs.UWords.BC, progress_bar_size);
         }
       }
-      write(buffer, n, fp);
-    } else { // Store result to string
-      while (n != maxdata && data_buffer->no_more_data == 0) {
-        data[n] = http_get_databyte(conn, data_buffer);
-        n++;
-      }
     }
-    n = 0;
-  }
-
-  if (fp > 4 && fp < 128) { // if it's a regular file
     printf("\r\n");
     printf("\33y5"); // Enable cursor
     close(fp);
+  }
+  else {
+    while (data_buffer->no_more_data == 0 && n != maxdata) {
+      if (fp < 128) { // Store result to file
+        while (n < TCP_BUFFER_SIZE && data_buffer->no_more_data == 0) {
+          buffer[n] = http_get_databyte(conn, data_buffer);
+          n++;
+        }
+        if (data_buffer->no_more_data == 1) {
+          n--; // decrease 1 to avoid copyying the null char
+        };
+        if (fp > 4) { // It's a regular file
+          bytes_written += n;
+          progress_bar(n, progress_bar_size);
+        }
+        write(buffer, n, fp);
+      } else { // Store result to string
+        while (n != maxdata && data_buffer->no_more_data == 0) {
+          data[n] = http_get_databyte(conn, data_buffer);
+          n++;
+        }
+      }
+      n = 0;
+    }
+
+    if (fp > 4 && fp < 128) { // if it's a regular file
+      printf("\r\n");
+      printf("\33y5"); // Enable cursor
+      close(fp);
+    }
   }
 
   run_or_die(tcp_close(conn));
@@ -628,30 +674,43 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
 /*** HTTP functions }}} ***/
 
 /*** functions {{{ ***/
+void init_progress_bar(unsigned long total, char size, char *filename, char *unit) {
+  int n;
+  current_bar_size = 0;
+  currentBlock = 0;
+  blockSize = total / size;
 
-void progress_bar(unsigned long current, unsigned long total, char size, char *unit) {
-  int n, m;
-
+  putchar('\r');
   putchar('[');
-  if (headers_info.is_chunked == 1) {
+  for (n=0; n<size; ++n)
+    putchar(' ');
+  putchar(']');
+
+  printf(" %s ", filename);		
+  if (unit[0]=='B')
+    printf("/ %lu%s\r\034\034", total, unit);
+  else
+    printf("/ %lu%s\r\034\034", total/1024, unit);
+}
+
+void progress_bar(unsigned long received, char size) {
+  int n;
+  if (headers_info.is_chunked != 1) {
+    currentBlock+=received;
+    while (currentBlock>=blockSize) {
+      ++current_bar_size;
+      currentBlock-=blockSize;
+      putchar(0x1d);
+      putchar('=');
+      if (size>current_bar_size)
+        putchar('>');
+    }
+  }
+  else {
     for (n=0; n <= size + 1; n++) {
       putchar('-');
     }
-  } else {
-    m = (int)((float)current / total * size);
-    for (n=0; n <= m; n++) {
-      putchar('=');
-    }
-    putchar('>');
-    for (n = m; n < size; n++) {
-      putchar(' ');
-    }
   }
-  printf("] %4lu%s", current, unit);
-  if (headers_info.is_chunked != 1) {
-    printf("/%lu%s", total, unit);
-  }
-  printf("\33K");
 }
 
 void debug(const char *s, ...) {
