@@ -156,5 +156,7 @@ extern unapi_code_block *code_block;
 extern unapi_connection_parameters *parameters;
 extern headers_info_t headers_info;
 extern data_buffer_t *data_buffer;
+extern unsigned long blockSize,currentBlock;
+extern char current_bar_size;
 
 #endif /* !GLOBALS_H */
