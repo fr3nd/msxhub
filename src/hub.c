@@ -170,17 +170,17 @@ char tcp_connect(char *conn, char *hostname, unsigned int port) {
   n = 0;
   do {
     abort_if_esc_is_pressed();
-  sys_timer_hold = *SYSTIMER;
-  TCP_WAIT();
+    sys_timer_hold = *SYSTIMER;
+    TCP_WAIT();
 
-  while(*SYSTIMER == sys_timer_hold);
-  n++;
-  if(n >= TICKS_TO_WAIT) {
-    return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
-  }
-  regs.Bytes.B = *conn;
-  regs.Words.HL = 0;
-  UnapiCall(code_block, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
+    while(*SYSTIMER == sys_timer_hold);
+    n++;
+    if(n >= TICKS_TO_WAIT) {
+      return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
+    }
+    regs.Bytes.B = *conn;
+    regs.Words.HL = 0;
+    UnapiCall(code_block, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
   } while((regs.Bytes.A) == 0 && (regs.Bytes.B != 4));
 
   if(regs.Bytes.A != 0) {
