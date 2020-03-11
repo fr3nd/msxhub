@@ -697,7 +697,8 @@ void progress_bar(unsigned long received, char size) {
   int n;
   if (headers_info.is_chunked != 1) {
     currentBlock+=received;
-    while (currentBlock>=blockSize) {
+    //Files with less bytes than barsize will have blocksize=0, so this will stop drawing the bar when full and move on
+    while ((currentBlock>=blockSize) && (size>current_bar_size)) {
       ++current_bar_size;
       currentBlock-=blockSize;
       putchar(0x1d);
