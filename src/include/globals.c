@@ -22,3 +22,5 @@ unapi_code_block *code_block;
 unapi_connection_parameters *parameters;
 headers_info_t headers_info;
 data_buffer_t *data_buffer;
+unsigned long blockSize,currentBlock;
+char current_bar_size;

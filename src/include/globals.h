@@ -9,7 +9,7 @@
 
 #include "asm.h"
 
-#define MSXHUB_VERSION "1.0.2"
+#define MSXHUB_VERSION "1.0.3"
 
 /* DOS errors */
 #define NOFIL   0xD7
@@ -133,12 +133,12 @@ typedef struct {
 } file_info_block_t;
 
 typedef struct {
-	char scheme[10];	/* scheme, without ":" and "//" */
-	char username[30];	/* username, default: NULL */
-	char password[30];	/* password, default: NULL */
-	char hostname[128];	/* hostname or IP address */
-	int port;	/* port, default: 0 */
-	char path[128];	/* path, without leading "/", default: NULL */
+  char scheme[10];  /* scheme, without ":" and "//" */
+  char username[30];  /* username, default: NULL */
+  char password[30];  /* password, default: NULL */
+  char hostname[128]; /* hostname or IP address */
+  int port; /* port, default: 0 */
+  char path[128]; /* path, without leading "/", default: NULL */
 } url;
 
 // Declaring global variables
@@ -156,5 +156,7 @@ extern unapi_code_block *code_block;
 extern unapi_connection_parameters *parameters;
 extern headers_info_t headers_info;
 extern data_buffer_t *data_buffer;
+extern unsigned long blockSize,currentBlock;
+extern char current_bar_size;
 
 #endif /* !GLOBALS_H */
