@@ -275,12 +275,11 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
   while(1) {
     abort_if_esc_is_pressed();
     TCP_WAIT();
-    if(*SYSTIMER != sys_timer_hold)
-    {
+    if(*SYSTIMER != sys_timer_hold) {
       n++;
       sys_timer_hold = *SYSTIMER;
     }
-    if(n >= TICKS_TO_WAIT){
+    if(n >= TICKS_TO_WAIT) {
       return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
     }
     regs.Bytes.B = *conn;
@@ -596,11 +595,11 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
 
   // Get data loop
   n = 0;
-  if ((fp > 4) && (fp <128) && (headers_info.is_chunked == 0)){    
-    if (data_buffer->current_pos < data_buffer->size){        
+  if ((fp > 4) && (fp <128) && (headers_info.is_chunked == 0)){
+    if (data_buffer->current_pos < data_buffer->size){
       n = data_buffer->size - data_buffer->current_pos;
       write(&data_buffer->data[data_buffer->current_pos], n, fp);
-      bytes_written += n;     
+      bytes_written += n;
       progress_bar(n, progress_bar_size);
     }
     sys_timer_hold = *SYSTIMER;
@@ -626,7 +625,7 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
           // TODO Implement urgent data
           debug("tcp_get: received %i bytes", regs.UWords.BC);
           write(data_buffer->data, regs.UWords.BC, fp);
-          bytes_written += regs.UWords.BC;      
+          bytes_written += regs.UWords.BC;
           progress_bar(regs.UWords.BC, progress_bar_size);
         }
       }
@@ -686,7 +685,7 @@ void init_progress_bar(unsigned long total, char size, char *filename, char *uni
     putchar(' ');
   putchar(']');
 
-  printf(" %s ", filename);   
+  printf(" %s ", filename);
   if (unit[0]=='B')
     printf("/ %lu%s\r\034\034", total, unit);
   else
