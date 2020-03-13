@@ -701,9 +701,10 @@ void progress_bar(unsigned long received, char size) {
       ++current_bar_size;
       currentBlock-=blockSize;
       putchar(0x1d);
-      putchar('=');
-      if (size>current_bar_size)
+      if (size>current_bar_size) {
+        putchar('=');
         putchar('>');
+      }
     }
   }
   else {
