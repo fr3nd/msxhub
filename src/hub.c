@@ -1111,6 +1111,7 @@ void install(char const *package, char const *installdir_arg) {
   strcat(path, "/pages");
   run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files)); // using files as temp variable. It needs to be converted to integer
   m = atoi(files);
+  created_dirs[0] = '\0';
 
   // Iterate pages
   for (n = 0; n<m; n++) {
@@ -1126,7 +1127,6 @@ void install(char const *package, char const *installdir_arg) {
     run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files));
 
     line = files;
-    created_dirs[0] = '\0';
 
     // Iterate trough all files
     // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
