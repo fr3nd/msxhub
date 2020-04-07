@@ -132,6 +132,15 @@ char getaddrinfo(char *hostname, ip_addr ip) {
 char tcp_connect(char *conn, char *hostname, unsigned int port) {
   int n;
   int sys_timer_hold;
+  
+  if (keepingconnectionalive) {
+    if(strcmp(keepalivehostname, hostname)==0)
+		return ERR_OK;
+  }
+  
+  if (trykeepalive) {
+    strcpy(keepalivehostname, hostname);
+  }
 
   debug("Connecting to %s:%d... ", hostname, port);
   getaddrinfo(hostname, parameters->remote_ip);
@@ -300,10 +309,14 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
 }
 
 char tcp_close(char *conn) {
-  if(conn != 0) {
+  if((conn != 0) && (!trykeepalive)){
     regs.Bytes.B = *conn;
     UnapiCall(code_block, TCPIP_TCP_CLOSE, &regs, REGS_MAIN, REGS_NONE);
     *conn = 0;
+    keepingconnectionalive = 0;
+  }
+  else if(trykeepalive){
+    keepingconnectionalive = 1;
   }
   // TODO Handle errors
   return ERR_OK;
@@ -403,9 +416,11 @@ char http_send(char *conn, char *hostname, char *username, char *password, unsig
   run_or_die(tcp_send(conn, buffer));
 
   run_or_die(tcp_send(conn, "Accept: */*\r\n"));
-  run_or_die(tcp_send(conn, "Connection: close\r\n"));
+  if (trykeepalive)
+    run_or_die(tcp_send(conn, "Connection: Keep-Alive\r\n"));
+  else
+    run_or_die(tcp_send(conn, "Connection: close\r\n"));
   run_or_die(tcp_send(conn, "Accept-Encoding: identity\r\n"));
-
   run_or_die(tcp_send(conn, "\r\n"));
   return 0;
 }
@@ -464,6 +479,10 @@ char http_get_headers(char *conn) {
                 debug("Transfer encoding is chunked.");
                 headers_info.is_chunked = 1;
                 data_buffer->chunked_data_available = 1;
+              }
+            }  else if (strcmp(title, "connection") == 0) {
+              if (strcmp(value, "close") == 0) {
+                trykeepalive = 0;
               }
             }
           }
@@ -538,7 +557,7 @@ char http_get_databyte(char *conn, data_buffer_t *data_buffer) {
 // - VAR sends output to var in data with maxdata
 //
 // note,use a negative value for maxdata when storing to file
-char http_get_content(char *conn, char *hostname, char *username, char *password, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data) {
+char http_get_content(char *conn, char *hostname, char *username, char *password, unsigned int port, char *method, char *path, char *pathfilename, int maxdata, char *data, unsigned char keepalive) {
   int fp;
   int n = 0;
   int sys_timer_hold;
@@ -547,6 +566,8 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
   char progress_bar_size = 0;
   char *file_name = NULL;
   url parsed_url;
+
+  trykeepalive = keepalive;
 
   run_or_die(http_send(conn, hostname, username, password, port, method, path));
   run_or_die(http_get_headers(conn));
@@ -844,6 +865,7 @@ int strcicmp(char const *a, char const *b) {
 /*** helper functions{{{ ***/
 void init(void) {
   DEBUG = 0;
+  keepingconnectionalive = 0;
 
   // Check MSX-DOS version >= 2
   msxdosver = dosver();
@@ -1069,7 +1091,7 @@ void install(char const *package, char const *installdir_arg) {
     strcat(path, "/");
     strcat(path, version);
     strcat(path, "/installdir");
-    run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, installdir));
+    run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, installdir, 1));
     strcpy(local_path, progsdir);
     strcat(local_path, installdir);
     strcpy(installdir, local_path);
@@ -1109,8 +1131,9 @@ void install(char const *package, char const *installdir_arg) {
   strcat(path, "/");
   strcat(path, version);
   strcat(path, "/pages");
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files)); // using files as temp variable. It needs to be converted to integer
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files, 1)); // using files as temp variable. It needs to be converted to integer
   m = atoi(files);
+  created_dirs[0] = '\0';
 
   // Iterate pages
   for (n = 0; n<m; n++) {
@@ -1123,10 +1146,9 @@ void install(char const *package, char const *installdir_arg) {
     strcat(path, "/files/");
     sprintf(files, "%d", n+1); // using variable files as temp variable
     strcat(path, files);
-    run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files));
+    run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "VAR", MAX_FILES_SIZE, files, 1));
 
-    line = files;
-    created_dirs[0] = '\0';
+    line = files;    
 
     // Iterate trough all files
     // https://stackoverflow.com/questions/17983005/c-how-to-read-a-string-line-by-line
@@ -1180,7 +1202,7 @@ void install(char const *package, char const *installdir_arg) {
         strcat(path, line);
 
         debug("Downloading %s %s to %s\r\n", parsed_url.hostname, path, local_path);
-        run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, local_path, -1, NULL));
+        run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, local_path, -1, NULL, 1));
 
         strcat(local_path, "\r\n");
         write(local_path, strlen(local_path), fp);
@@ -1217,6 +1239,10 @@ void install(char const *package, char const *installdir_arg) {
 
   strcpy(local_path, installdir);
   printf("- Done! Package %s installed in %s\r\n", package, local_path);
+  if (trykeepalive) {
+    trykeepalive = 0;
+    tcp_close(&conn);
+  }
 }
 
 void uninstall(char *package) {
@@ -1385,7 +1411,7 @@ void categories(void) {
   init_unapi();
 
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/api/categories", "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", "/api/categories", "CON", -1, NULL, 0));
 }
 
 void list(char *category) {
@@ -1403,7 +1429,7 @@ void list(char *category) {
   }
 
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL, 0));
 }
 
 void info(char *package) {
@@ -1419,7 +1445,7 @@ void info(char *package) {
   strcat(path, "/info");
 
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL, 0));
 }
 
 void search(char *search_string) {
@@ -1438,7 +1464,7 @@ void search(char *search_string) {
   strcat(path, search_string);
 
   parse_url(baseurl, &parsed_url);
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", path, "CON", -1, NULL, 0));
 }
 
 
@@ -1489,7 +1515,7 @@ void get(char const *urlstring, char const *destination) {
     strcat(path, basename(parsed_url.path));
   }
 
-  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", parsed_url.path, path, -1, NULL));
+  run_or_die(http_get_content(&conn, parsed_url.hostname, parsed_url.username, parsed_url.password, parsed_url.port, "GET", parsed_url.path, path, -1, NULL, 0));
 }
 
 void version() {
