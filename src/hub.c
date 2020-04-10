@@ -21,6 +21,7 @@ void toupper_str(char *str);
 unsigned long hexstr2ul(char *str);
 void abort_if_esc_is_pressed(void);
 void parse_url(char *url, url *parsed_url);
+char tcp_close(char *conn);
 /*** prototypes }}} ***/
 
 /*** UNAPI functions {{{ ***/
@@ -132,15 +133,10 @@ char getaddrinfo(char *hostname, ip_addr ip) {
 char tcp_connect(char *conn, char *hostname, unsigned int port) {
   int n;
   int sys_timer_hold;
-  
-  if (keepingconnectionalive) {
-    if(strcmp(keepalivehostname, hostname)==0)
-		return ERR_OK;
-  }
-  
-  if (trykeepalive) {
-    strcpy(keepalivehostname, hostname);
-  }
+
+  // First closing the connection if it's already opened
+  // This may happen if keepalive failed for some reason
+  tcp_close(conn);
 
   debug("Connecting to %s:%d... ", hostname, port);
   getaddrinfo(hostname, parameters->remote_ip);
@@ -309,14 +305,10 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
 }
 
 char tcp_close(char *conn) {
-  if((conn != 0) && (!trykeepalive)){
+  if(conn != 0) {
     regs.Bytes.B = *conn;
     UnapiCall(code_block, TCPIP_TCP_CLOSE, &regs, REGS_MAIN, REGS_NONE);
     *conn = 0;
-    keepingconnectionalive = 0;
-  }
-  else if(trykeepalive){
-    keepingconnectionalive = 1;
   }
   // TODO Handle errors
   return ERR_OK;
@@ -395,7 +387,17 @@ char http_send(char *conn, char *hostname, char *username, char *password, unsig
 
   init_headers_info();
 
-  run_or_die(tcp_connect(conn, hostname, port));
+  // Open new connection if:
+  // * It's not already opened
+  // * Keepalive is disabled
+  // * Hostname is different from previous one
+  if (conn == 0 || keepingconnectionalive == 0 || strcmp(keepalivehostname, hostname) != 0) {
+    run_or_die(tcp_connect(conn, hostname, port));
+  }
+
+  if (trykeepalive) {
+    strcpy(keepalivehostname, hostname);
+  }
 
   sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
   run_or_die(tcp_send(conn, buffer));
@@ -480,7 +482,7 @@ char http_get_headers(char *conn) {
                 headers_info.is_chunked = 1;
                 data_buffer->chunked_data_available = 1;
               }
-            }  else if (strcmp(title, "connection") == 0) {
+            } else if (strcmp(title, "connection") == 0) {
               if (strcmp(value, "close") == 0) {
                 trykeepalive = 0;
               }
@@ -686,7 +688,12 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
     }
   }
 
-  run_or_die(tcp_close(conn));
+  if (trykeepalive == 0) {
+    run_or_die(tcp_close(conn));
+    keepingconnectionalive = 0;
+  } else {
+    keepingconnectionalive = 1;
+  }
   return ERR_OK;
 }
 
@@ -1239,10 +1246,7 @@ void install(char const *package, char const *installdir_arg) {
 
   strcpy(local_path, installdir);
   printf("- Done! Package %s installed in %s\r\n", package, local_path);
-  if (trykeepalive) {
-    trykeepalive = 0;
-    tcp_close(&conn);
-  }
+  tcp_close(&conn);
 }
 
 void uninstall(char *package) {
