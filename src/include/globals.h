@@ -9,7 +9,7 @@
 
 #include "asm.h"
 
-#define MSXHUB_VERSION "1.0.3"
+#define MSXHUB_VERSION "1.0.4"
 
 /* DOS errors */
 #define NOFIL   0xD7
@@ -158,5 +158,8 @@ extern headers_info_t headers_info;
 extern data_buffer_t *data_buffer;
 extern unsigned long blockSize,currentBlock;
 extern char current_bar_size;
+extern char keepalivehostname[128];
+extern unsigned char keepingconnectionalive;
+extern unsigned char trykeepalive;
 
 #endif /* !GLOBALS_H */
