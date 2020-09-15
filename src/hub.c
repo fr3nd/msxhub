@@ -173,20 +173,25 @@ char tcp_connect(char *conn, char *hostname, unsigned int port) {
   *conn = regs.Bytes.B;
 
   n = 0;
+  sys_timer_hold = *SYSTIMER;
   do {
-    abort_if_esc_is_pressed();
-    sys_timer_hold = *SYSTIMER;
-    TCP_WAIT();
+    abort_if_esc_is_pressed();        
 
-    while(*SYSTIMER == sys_timer_hold);
-    n++;
-    if(n >= TICKS_TO_WAIT) {
-      return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
-    }
+    if(*SYSTIMER != sys_timer_hold) {
+      n++;
+      if(n >= TICKS_TO_WAIT) {
+        return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
+      }
+      sys_timer_hold = *SYSTIMER;
+    }    
     regs.Bytes.B = *conn;
     regs.Words.HL = 0;
     UnapiCall(code_block, TCPIP_TCP_STATE, &regs, REGS_MAIN, REGS_MAIN);
-  } while((regs.Bytes.A) == 0 && (regs.Bytes.B != 4));
+    if((regs.Bytes.A) == 0 && (regs.Bytes.B != 4))
+      TCP_WAIT();
+    else
+      break;
+  } while(1);
 
   if(regs.Bytes.A != 0) {
     debug("Error connecting: %i", regs.Bytes.A);
@@ -279,14 +284,15 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
   sys_timer_hold = *SYSTIMER;
   while(1) {
     abort_if_esc_is_pressed();
-    TCP_WAIT();
+    
     if(*SYSTIMER != sys_timer_hold) {
       n++;
+      if(n >= TICKS_TO_WAIT) {
+        return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
+      }
       sys_timer_hold = *SYSTIMER;
     }
-    if(n >= TICKS_TO_WAIT) {
-      return ERR_CUSTOM + ERR_CUSTOM_TIMEOUT;
-    }
+    
     regs.Bytes.B = *conn;
     regs.Words.DE = (int)data_buffer->data;
     regs.Words.HL = TCP_BUFFER_SIZE;
@@ -299,6 +305,8 @@ char tcp_get(char *conn, data_buffer_t *data_buffer) {
         data_buffer->size = regs.UWords.BC;
         debug("tcp_get: received %i bytes", regs.UWords.BC);
         return 0;
+      } else {
+        TCP_WAIT();
       }
     }
   }
@@ -383,47 +391,131 @@ char http_send(char *conn, char *hostname, char *username, char *password, unsig
   char buffer[128];
   char credentials[128];
   char credentialsb64[128];
-  int l;
+  int l,retcode;
+  static unsigned char continue_using_keep_alive = 1;
 
-  init_headers_info();
+  do {
+    keepingconnectionalive = keepingconnectionalive & continue_using_keep_alive;
 
-  // Open new connection if:
-  // * It's not already opened
-  // * Keepalive is disabled
-  // * Hostname is different from previous one
-  if (conn == 0 || keepingconnectionalive == 0 || strcmp(keepalivehostname, hostname) != 0) {
-    run_or_die(tcp_connect(conn, hostname, port));
-  }
+    init_headers_info();
 
-  if (trykeepalive) {
-    strcpy(keepalivehostname, hostname);
-  }
+    // Open new connection if:
+    // * It's not already opened
+    // * Keepalive is disabled
+    // * Hostname is different from previous one
+    if (conn == 0 || keepingconnectionalive == 0 || strcmp(keepalivehostname, hostname) != 0) {
+      retcode = tcp_connect(conn, hostname, port);
+      if (retcode != 0) {
+        die(unapi_strerror(retcode));
+      }
+    }
 
-  sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
-  run_or_die(tcp_send(conn, buffer));
+    if (trykeepalive) {
+      strcpy(keepalivehostname, hostname);
+    }
 
-  sprintf(buffer, "Host: %s\r\n", hostname);
-  run_or_die(tcp_send(conn, buffer));
+    sprintf(buffer, "%s %s HTTP/1.1\r\n", method, path);
+    retcode = tcp_send(conn, buffer);
+    if (retcode != 0) {
+      if ( keepingconnectionalive & continue_using_keep_alive ) {
+        continue_using_keep_alive = 0;
+        keepingconnectionalive = 0;
+        continue;
+      }
+      else
+        die(unapi_strerror(retcode));
+    }
 
-  if (username[0] != '\0' && password[0] != '\0') {
-    Base64Init(0);
-    sprintf(credentials, "%s:%s", username, password);
-    l = Base64EncodeChunk(credentials, credentialsb64, strlen(credentials), 1);
-    credentialsb64[l] = '\0';
-    sprintf(buffer, "Authorization: Basic %s\r\n", credentialsb64);
-    run_or_die(tcp_send(conn, buffer));
-  }
+    sprintf(buffer, "Host: %s\r\n", hostname);
+    retcode = tcp_send(conn, buffer);
+    if (retcode != 0) {
+      if ( keepingconnectionalive & continue_using_keep_alive ) {
+        continue_using_keep_alive = 0;
+        keepingconnectionalive = 0;
+        continue;
+      }
+      else
+        die(unapi_strerror(retcode));
+    }
 
-  sprintf(buffer, "User-Agent: MSXHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
-  run_or_die(tcp_send(conn, buffer));
+    if (username[0] != '\0' && password[0] != '\0') {
+      Base64Init(0);
+      sprintf(credentials, "%s:%s", username, password);
+      l = Base64EncodeChunk(credentials, credentialsb64, strlen(credentials), 1);
+      credentialsb64[l] = '\0';
+      sprintf(buffer, "Authorization: Basic %s\r\n", credentialsb64);
+      retcode = tcp_send(conn, buffer);
+      if (retcode != 0) {
+        if ( keepingconnectionalive & continue_using_keep_alive ) {
+          continue_using_keep_alive = 0;
+          keepingconnectionalive = 0;
+          continue;
+        }
+        else
+          die(unapi_strerror(retcode));
+      }
+    }
 
-  run_or_die(tcp_send(conn, "Accept: */*\r\n"));
-  if (trykeepalive)
-    run_or_die(tcp_send(conn, "Connection: Keep-Alive\r\n"));
-  else
-    run_or_die(tcp_send(conn, "Connection: close\r\n"));
-  run_or_die(tcp_send(conn, "Accept-Encoding: identity\r\n"));
-  run_or_die(tcp_send(conn, "\r\n"));
+    sprintf(buffer, "User-Agent: MSXHub/%s (MSX-DOS %i; %s)\r\n", MSXHUB_VERSION, msxdosver, unapiver);
+    retcode = tcp_send(conn, buffer);
+    if (retcode != 0) {
+      if ( keepingconnectionalive & continue_using_keep_alive ) {
+        continue_using_keep_alive = 0;
+        keepingconnectionalive = 0;
+        continue;
+      }
+      else
+        die(unapi_strerror(retcode));
+    }
+
+    retcode = tcp_send(conn, "Accept: */*\r\n");
+    if (retcode != 0) {
+      if ( keepingconnectionalive & continue_using_keep_alive ) {
+        continue_using_keep_alive = 0;
+        keepingconnectionalive = 0;
+        continue;
+      }
+      else
+        die(unapi_strerror(retcode));
+    }
+
+    if (trykeepalive) {
+      retcode = tcp_send(conn, "Connection: Keep-Alive\r\n");
+      if (retcode != 0) {
+        if ( keepingconnectionalive & continue_using_keep_alive ) {
+          continue_using_keep_alive = 0;
+          keepingconnectionalive = 0;
+          continue;
+        }
+        else
+          die(unapi_strerror(retcode));
+      }
+    }
+    else {
+      retcode = tcp_send(conn, "Connection: close\r\n");
+      if (retcode != 0) {
+        if ( keepingconnectionalive & continue_using_keep_alive ) {
+          continue_using_keep_alive = 0;
+          keepingconnectionalive = 0;
+          continue;
+        }
+        else
+          die(unapi_strerror(retcode));
+      }
+    }
+    retcode = tcp_send(conn, "Accept-Encoding: identity\r\n\r\n");
+    if (retcode != 0) {
+      if ( keepingconnectionalive & continue_using_keep_alive ) {
+        continue_using_keep_alive = 0;
+        keepingconnectionalive = 0;
+        continue;
+      }
+      else
+        die(unapi_strerror(retcode));
+    }
+    break; //if here, all ran well, no need to retry, just break the do while
+  } while (1);
+
   return 0;
 }
 
@@ -605,7 +697,10 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
     die("%s", buffer);
   }
 
-  if (fp > 4 && fp < 128) { // If it's a regular file: progress bar
+  if (fp > 4 && fp < 128) { 
+    if (headers_info.content_length>2)
+      preallocate(fp, headers_info.content_length);
+    // If it's a regular file: progress bar
     printf("\33x5"); // Disable cursor
     progress_bar_size = get_screen_size() - 24 - 12;
     file_name = (unsigned char*)parse_pathname(0, pathfilename);
@@ -627,8 +722,7 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
     }
     sys_timer_hold = *SYSTIMER;
     while(bytes_written < headers_info.content_length) {
-      abort_if_esc_is_pressed();
-      TCP_WAIT();
+      abort_if_esc_is_pressed();      
       if(*SYSTIMER != sys_timer_hold) {
         n++;
         sys_timer_hold = *SYSTIMER;
@@ -650,6 +744,8 @@ char http_get_content(char *conn, char *hostname, char *username, char *password
           write(data_buffer->data, regs.UWords.BC, fp);
           bytes_written += regs.UWords.BC;
           progress_bar(regs.UWords.BC, progress_bar_size);
+        } else {
+          TCP_WAIT();
         }
       }
     }
@@ -1256,11 +1352,15 @@ void uninstall(char *package) {
   int bytes_read;
   char buffer[MAX_PATH_SIZE];
   char current_file[MAX_PATH_SIZE];
+  char undeleted_directories[5][MAX_PATH_SIZE];
+  char undeleted_directories_count = 0;
 
   if (package[0] == '\0') {
     die("Package name not specified.");
   }
 
+  for (c=0;c<5;++c)
+    undeleted_directories[c][0]='\0';
   // Check if installed
 
   toupper_str(package);
@@ -1302,7 +1402,11 @@ void uninstall(char *package) {
           if (c == 0xD7) { // File does not exist. Continue
             printf("WARNING: File %s does not exist...\r\n", current_file);
           } else if (c == 0xD0) { // Directory not empty. Continue
-            printf("WARNING: Directory %s not empty. Not deleting.\r\n", current_file);
+            printf("WARNING: Directory %s not empty. Not deleting now, will try later...\r\n", current_file);
+            if (undeleted_directories_count<5) {
+              strcpy(undeleted_directories[undeleted_directories_count], current_file);
+              ++undeleted_directories_count;
+            }
           } else { // Another error
             printf("Error deleting file %s: 0x%X\r\n", current_file, c);
             explain(buffer, c);
@@ -1318,6 +1422,15 @@ void uninstall(char *package) {
     }
   }
   close(fp);
+
+  if (undeleted_directories_count) {
+    for (n=0;n<undeleted_directories_count;++n) {
+      c = delete_file(undeleted_directories[n]);
+      if (c == 0xD0) { // Directory not empty yet
+        printf("WARNING: Directory %s not empty. Not deleting it...\r\n", undeleted_directories[n]);
+      }
+    }
+  }
 
   // Remove file in idb
   strcpy(buffer, configpath);
