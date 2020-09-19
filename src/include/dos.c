@@ -120,6 +120,50 @@ int create(char *fn, char mode, char attributes) __naked {
   __endasm;
 }
 
+void preallocate(int fp, long allocationsize) __naked {
+  fp;
+  allocationsize;
+  __asm
+    push ix
+    ld ix,#4
+    add ix,sp
+        
+    ld l,2(ix)
+    ld h,3(ix)
+	xor a
+	ld bc,#0x0001
+	sbc hl,bc
+    ld e,4(ix)
+    ld d,5(ix)
+	jr nc, 00001$
+	dec de
+00001$:	
+	ld b,0(ix)
+    ld c, SEEK
+    DOSCALL
+
+    ld b,0(ix)
+    ld de,#0x8000
+    ld hl,#0x0001
+    ld c, WRITE
+    DOSCALL
+	
+    ld b,0(ix)
+    xor a
+	ld de,#0x0000
+	ld hl,#0x0000
+	ld c, SEEK
+	DOSCALL
+
+    ld b,0(ix)
+	ld c, ENSURE
+	DOSCALL
+
+    pop ix
+    ret
+  __endasm;
+}
+
 int close(int fp) __naked {
   fp;
   __asm

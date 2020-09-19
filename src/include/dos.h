@@ -15,8 +15,10 @@
 #define OPEN    #0x43
 #define CREATE  #0x44
 #define CLOSE   #0x45
+#define ENSURE  #0x46
 #define READ    #0x48
 #define WRITE   #0x49
+#define SEEK    #0x4A
 #define IOCTL   #0x4B
 #define DELETE  #0x4D
 #define GETCD   #0x59
@@ -36,6 +38,7 @@ int putchar(int c);
 char get_current_drive(void);
 int open(char *fn, char mode);
 int create(char *fn, char mode, char attributes);
+void preallocate(int fp, long allocationsize);
 int close(int fp);
 int read(char* buf, unsigned int size, char fp);
 unsigned int write(char* buf, unsigned int size, int fp);
