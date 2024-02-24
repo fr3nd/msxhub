@@ -1445,8 +1445,53 @@ void uninstall(char *package) {
 }
 
 void upgrade(char *package) {
+  int fp;
+  int n, m;
+  int bytes_read;
+  char buffer[MAX_PATH_SIZE];
+  char current_file[MAX_PATH_SIZE];
+
+  // Get installed directory so upgrade is installed in the same one
+  strcpy(buffer, configpath);
+  strcat(buffer, "\\IDB\\");
+  strcat(buffer, package);
+  fp = open(buffer, O_RDONLY);
+
+  if (fp < 0) {
+    n = (fp >> 0) & 0xff;
+    if (n == 0xD7) {
+      die("Package %s is not installed.", package);
+    } else {
+      printf("Error reading configuration %s: 0x%X\r\n", buffer, n);
+      explain(buffer, n);
+      die("%s", buffer);
+    }
+  }
+
+  current_file[0] = '\0';
+  m = 0;
+  while(1) {
+    bytes_read = read(buffer, MAX_PATH_SIZE, fp);
+
+    for (n=0; n<bytes_read ;n++) {
+      if (buffer[n] != '\n' && buffer[n] != '\r') {
+        current_file[m] = buffer[n];
+        m++;
+      } else if (buffer[n] == '\n') {
+        current_file[m] = '\0';
+        m = 0;
+      }
+    }
+
+    if (bytes_read < MAX_PATH_SIZE) {
+      break;
+    }
+  }
+  close(fp);
+
+  printf("- Installation dir: %s\r\n", current_file);
   uninstall(package);
-  install(package, "");
+  install(package, current_file);
 }
 
 void configure(void) {
